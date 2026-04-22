@@ -470,9 +470,10 @@ describe("projectWeaveEvent — decision, phase, exit", () => {
     const result = await Effect.runPromise(projectWeaveEvent(state, resolved));
     expect(result.openDecisions.has(decisionId)).toBe(false);
     expect(result.autoDecisionLog.length).toBe(1);
-    expect(result.autoDecisionLog[0].decisionId).toBe(decisionId);
-    expect(result.autoDecisionLog[0].answer).toBe("b");
-    expect(result.autoDecisionLog[0].at).toBe(now);
+    const logEntry = result.autoDecisionLog[0];
+    expect(logEntry?.decisionId).toBe(decisionId);
+    expect(logEntry?.answer).toBe("b");
+    expect(logEntry?.at).toBe(now);
   });
 
   it("weave.phase-approved with approval=approved sets phaseApprovals entry", async () => {

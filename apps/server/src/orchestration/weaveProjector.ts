@@ -285,7 +285,9 @@ export function projectWeaveEvent(
     default: {
       const _exhaustive: never = event;
       void _exhaustive;
-      return Effect.succeed(state);
+      // unreachable: all weave event types are explicitly handled above.
+      // The never type assignment ensures TypeScript enforces exhaustiveness.
+      return Effect.succeed(state as never);
     }
   }
 }
