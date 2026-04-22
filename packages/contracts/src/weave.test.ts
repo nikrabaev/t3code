@@ -281,3 +281,81 @@ it.effect("round-trips a failed WeaveNode with a failureNote", () =>
     assert.strictEqual(parsed.failureNote, "Contract amendment needed.");
   }),
 );
+
+import { Blueprint } from "./weave.ts";
+
+const decodeBlueprint = Schema.decodeUnknownEffect(Blueprint);
+
+it.effect("round-trips a Blueprint with one phase, one node, zero contracts/decisions", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeBlueprint({
+      version: 1,
+      nodes: [
+        {
+          id: "node-1",
+          title: "Scaffold",
+          description: "",
+          kind: "scaffold",
+          phaseId: "phase-1",
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        {
+          id: "phase-1",
+          ordinal: 0,
+          title: "Foundations",
+          description: "",
+          approval: "pending",
+        },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: "2026-04-21T00:00:00.000Z",
+      compiledBy: "planner",
+    });
+    assert.strictEqual(parsed.version, 1);
+    assert.strictEqual(parsed.nodes.length, 1);
+    assert.strictEqual(parsed.phases.length, 1);
+    assert.strictEqual(parsed.compiledBy, "planner");
+  }),
+);
+
+it.effect("accepts every Blueprint.compiledBy literal", () =>
+  Effect.gen(function* () {
+    for (const source of ["planner", "amendment", "redesign"] as const) {
+      const parsed = yield* decodeBlueprint({
+        version: 2,
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: "2026-04-21T00:00:00.000Z",
+        compiledBy: source,
+      });
+      assert.strictEqual(parsed.compiledBy, source);
+    }
+  }),
+);
+
+it.effect("rejects an unknown Blueprint.compiledBy", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeBlueprint({
+        version: 1,
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: "2026-04-21T00:00:00.000Z",
+        compiledBy: "user", // not in the literal set
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);

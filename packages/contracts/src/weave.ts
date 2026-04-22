@@ -139,3 +139,19 @@ export const WeaveNode = Schema.Struct({
   failureNote: Schema.optional(Schema.String),
 });
 export type WeaveNode = typeof WeaveNode.Type;
+
+// Blueprint — the compiled DAG. The only globally shared state in Weave mode.
+// Versioned; every recompile (initial, amendment, redesign) yields a new version.
+export const BlueprintSource = Schema.Literals(["planner", "amendment", "redesign"]);
+export type BlueprintSource = typeof BlueprintSource.Type;
+
+export const Blueprint = Schema.Struct({
+  version: BlueprintVersion,
+  nodes: Schema.Array(WeaveNode),
+  phases: Schema.Array(WeavePhase),
+  contracts: Schema.Array(WeaveContract),
+  decisions: Schema.Array(WeaveDecision),
+  compiledAt: IsoDateTime,
+  compiledBy: BlueprintSource,
+});
+export type Blueprint = typeof Blueprint.Type;
