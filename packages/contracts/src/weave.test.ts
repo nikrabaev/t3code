@@ -672,6 +672,39 @@ it.effect("WeaveInternalCommand union decodes every variant", () =>
   }),
 );
 
+import { WeaveCommand } from "./weave.ts";
+
+const decodeWeaveCommand = Schema.decodeUnknownEffect(WeaveCommand);
+
+it.effect("WeaveCommand union decodes a dispatchable variant", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveCommand({
+      type: "weave.create",
+      commandId: "cmd-wc1",
+      weaveRunId: "run-1",
+      projectId: "project-1",
+      title: "X",
+      vision: "",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.create");
+  }),
+);
+
+it.effect("WeaveCommand union decodes an internal variant", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveCommand({
+      type: "weave.node.verified",
+      commandId: "cmd-wc2",
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      verifierOutcome: "tests-passed",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.node.verified");
+  }),
+);
+
 import {
   WeaveBlueprintApprovedPayload,
   WeaveBlueprintCompiledPayload,

@@ -675,3 +675,162 @@ it.effect("decodes weave.exit via OrchestrationCommand", () =>
     assert.strictEqual(parsed.type, "weave.exit");
   }),
 );
+
+// Union-dispatch coverage for the remaining six weave event variants
+// (weave.created, weave.blueprint-approved, weave.exited are already
+// covered above; these tests round out OrchestrationEvent's discrimination
+// over the full weave event namespace).
+it.effect("decodes weave.blueprint-compiled event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 10,
+      eventId: "event-w-bc",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.blueprint-compiled",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        version: 1,
+        blueprint: {
+          version: 1,
+          nodes: [],
+          phases: [],
+          contracts: [],
+          decisions: [],
+          compiledAt: "2026-04-21T00:00:00.000Z",
+          compiledBy: "planner",
+        },
+        compiledBy: "planner",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.blueprint-compiled");
+  }),
+);
+
+it.effect("decodes weave.node-dispatched event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 11,
+      eventId: "event-w-nd",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.node-dispatched",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        nodeId: "node-1",
+        childThreadId: "thread-1",
+        worktreePath: "/tmp/wt",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.node-dispatched");
+  }),
+);
+
+it.effect("decodes weave.node-verified event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 12,
+      eventId: "event-w-nv",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.node-verified",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        nodeId: "node-1",
+        verifierOutcome: "tests-passed",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.node-verified");
+  }),
+);
+
+it.effect("decodes weave.node-failed event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 13,
+      eventId: "event-w-nf",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.node-failed",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        nodeId: "node-1",
+        reason: "x",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.node-failed");
+  }),
+);
+
+it.effect("decodes weave.decision-resolved event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 14,
+      eventId: "event-w-dr",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.decision-resolved",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        decisionId: "decision-1",
+        answer: "a",
+        byUser: false,
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.decision-resolved");
+  }),
+);
+
+it.effect("decodes weave.phase-approved event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 15,
+      eventId: "event-w-pa",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.phase-approved",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        phaseId: "phase-1",
+        approval: "approved",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.phase-approved");
+  }),
+);
