@@ -42,7 +42,7 @@ export type WeaveRunStatus = typeof WeaveRunStatus.Type;
 
 export const WeaveNodeStatus = Schema.Literals([
   "pending",    // ancestors not ready
-  "ready",      // schedulable
+  "ready",      // schedulable (ancestors verified, decisions resolved)
   "running",    // child thread active
   "verified",   // verifier green
   "failed",     // verifier red, ladder exhausted
@@ -59,7 +59,7 @@ export const WeaveNodeKind = Schema.Literals([
 export type WeaveNodeKind = typeof WeaveNodeKind.Type;
 
 export const WeavePhaseApproval = Schema.Literals([
-  "pending",
+  "pending",    // phase not yet complete
   "approved",
   "rejected",
 ]);
@@ -71,7 +71,7 @@ export const DecisionPreAuthScope = Schema.Literals([
   "copy",       // user-facing text
   "auth",       // authentication / authorization
   "data",       // schema decisions, storage shape
-  "cost",       // billing-adjacent
+  "cost",       // anything with billing implications
 ]);
 export type DecisionPreAuthScope = typeof DecisionPreAuthScope.Type;
 
