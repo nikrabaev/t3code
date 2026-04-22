@@ -74,15 +74,21 @@ The controller fills `<EXPECTED_SHA_AND_TITLE_n>` per task based on the plan's t
 
 ## Branch setup (already in place — read-only verification)
 
-Slice 2 executes on `nikrabaev/weave`, the single canonical branch for all Weave work. `main` tracks `origin/main` (upstream t3code) and is NOT touched by Slice 2. The plan document that defines this slice is already committed at HEAD (`2e2ca5f1 docs: add Weave v0.1 Slice 2 …`), so Task 1 begins directly on top of it.
+Slice 2 executes on `nikrabaev/weave`, the single canonical branch for all Weave work. `main` tracks `origin/main` (upstream t3code) and is NOT touched by Slice 2. The plan document that defines this slice is already committed on the branch (at or near HEAD — the branch may have a few housekeeping commits on top refreshing paths), so Task 1 begins directly on top of whatever the branch tip is when execution starts.
 
 Verify before starting Task 1:
 
 ```bash
 cd /Users/nikrabaev/Work/personal/ai-deep-plan/t3code
-git branch --show-current          # must be `nikrabaev/weave`
-git log --oneline HEAD~1..HEAD     # must show `2e2ca5f1 docs: add Weave v0.1 Slice 2 …`
-git tag --list weave-v0.1-slice-1  # must show the tag (sanity: Slice 1 close intact)
+git branch --show-current               # must be `nikrabaev/weave`
+git log --oneline HEAD~4..HEAD          # recent commits; top is the current branch tip
+git log --oneline HEAD~4..HEAD | grep -q "Weave v0.1 Slice 2" \
+  && echo "Slice 2 plan committed ✓" \
+  || echo "Slice 2 plan NOT in recent history — STOP"
+git tag --list weave-v0.1-slice-1       # must show the tag (sanity: Slice 1 close intact)
+git merge-base --is-ancestor weave-v0.1-slice-1 HEAD \
+  && echo "Slice 1 close reachable ✓" \
+  || echo "Slice 1 tag orphaned — controller must retag before proceeding"
 ```
 
 If `nikrabaev/weave` is NOT checked out, stop — the controller needs to switch branches before proceeding. Do not create a new branch.
