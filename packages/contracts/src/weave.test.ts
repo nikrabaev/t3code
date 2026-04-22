@@ -115,12 +115,7 @@ it.effect("accepts every DecisionPreAuthScope literal", () =>
   }),
 );
 
-import {
-  Scope,
-  WeaveContract,
-  WeaveDecision,
-  WeavePhase,
-} from "./weave.ts";
+import { Scope, WeaveContract, WeaveDecision, WeavePhase } from "./weave.ts";
 
 const decodeScope = Schema.decodeUnknownEffect(Scope);
 const decodeWeaveContract = Schema.decodeUnknownEffect(WeaveContract);
@@ -160,10 +155,7 @@ it.effect("round-trips a WeaveContract with conformanceTestPath", () =>
       semantics: "",
       conformanceTestPath: ".weave/contracts/node-2/conformance.test.ts",
     });
-    assert.strictEqual(
-      parsed.conformanceTestPath,
-      ".weave/contracts/node-2/conformance.test.ts",
-    );
+    assert.strictEqual(parsed.conformanceTestPath, ".weave/contracts/node-2/conformance.test.ts");
   }),
 );
 
@@ -702,9 +694,7 @@ const decodeWeaveBlueprintApprovedPayload = Schema.decodeUnknownEffect(
 const decodeWeaveNodeDispatchedPayload = Schema.decodeUnknownEffect(WeaveNodeDispatchedPayload);
 const decodeWeaveNodeVerifiedPayload = Schema.decodeUnknownEffect(WeaveNodeVerifiedPayload);
 const decodeWeaveNodeFailedPayload = Schema.decodeUnknownEffect(WeaveNodeFailedPayload);
-const decodeWeaveDecisionResolvedPayload = Schema.decodeUnknownEffect(
-  WeaveDecisionResolvedPayload,
-);
+const decodeWeaveDecisionResolvedPayload = Schema.decodeUnknownEffect(WeaveDecisionResolvedPayload);
 const decodeWeavePhaseApprovedPayload = Schema.decodeUnknownEffect(WeavePhaseApprovedPayload);
 const decodeWeaveExitedPayload = Schema.decodeUnknownEffect(WeaveExitedPayload);
 

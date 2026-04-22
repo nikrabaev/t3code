@@ -12,19 +12,19 @@
 
 ## Context: deviations from the spec text
 
-[docs/v0.1-spec.md](../../../../docs/v0.1-spec.md) §Slice 1 is written as an aspirational sketch. The actual `packages/contracts/src/orchestration.ts` already has established conventions that the sketch does not match. **This plan follows the codebase conventions, not the sketch verbatim.** The spec's §1.8 explicitly authorizes this (*"Inspect the actual current shape of `OrchestrationDomainEvent` in `orchestration.ts` / `ws.ts` before merging"*). Specific deltas:
+[docs/v0.1-spec.md](../../../../docs/v0.1-spec.md) §Slice 1 is written as an aspirational sketch. The actual `packages/contracts/src/orchestration.ts` already has established conventions that the sketch does not match. **This plan follows the codebase conventions, not the sketch verbatim.** The spec's §1.8 explicitly authorizes this (_"Inspect the actual current shape of `OrchestrationDomainEvent` in `orchestration.ts` / `ws.ts` before merging"_). Specific deltas:
 
-| Spec sketch | Codebase convention we follow |
-|---|---|
-| `export const WeaveRunId = Schema.String.pipe(Schema.brand("WeaveRunId"))` | `makeEntityId("WeaveRunId")` in [`baseSchemas.ts`](../../../../packages/contracts/src/baseSchemas.ts) — trimmed non-empty string |
-| `const Cmd = <K, P>(kind: K, payload: P) => Schema.Struct({ kind: Schema.Literal(kind), commandId: Schema.String, ...payload })` | Explicit `Schema.Struct({ type: Schema.Literal("..."), commandId: CommandId, ..., createdAt: IsoDateTime })` — matches `ThreadCreateCommand` etc. |
-| `const Evt = <K, P>(kind, payload) => Schema.Struct({ type, aggregate, weaveRunId, occurredAt, ...payload })` | Payload-only structs (e.g. `WeaveCreatedPayload`); wrapped with `EventBaseFields` in the `OrchestrationEvent` union — matches `ThreadCreatedPayload` etc. |
-| `OrchestrationDomainEvent = Schema.Union(ThreadDomainEvent, WeaveDomainEvent)` | No `ThreadDomainEvent` exists. Extend `OrchestrationEvent` (the real master union), `OrchestrationAggregateKind`, `OrchestrationEventType`, and the `aggregateId` union. |
-| `aggregate: "thread" \| "weave"` discriminant | `aggregateKind: "project" \| "thread"` (extend with `"weave"`); `aggregateId` is `Schema.Union([ProjectId, ThreadId])` (extend with `WeaveRunId`). |
-| Free-form `Schema.String` timestamps | `IsoDateTime` from `baseSchemas.ts` |
-| Free-form `Schema.String` text fields | `TrimmedNonEmptyString` where non-empty is meaningful (title, question, etc.); `Schema.String` for multi-line content (Markdown descriptions, semantics, surface) |
-| Spec's `projectId: Schema.String` on `WeaveRun` / `WeaveCreateCommand` / `WeaveCreatedPayload` | **Branded `ProjectId` from `baseSchemas.ts`.** All branded IDs live there (not in `orchestration.ts`), so there is no import-cycle risk; `weave.ts` and `orchestration.ts` both import from `baseSchemas.ts` as peers. |
-| Spec's `parentThreadId` / `parentMessageId` / `childThreadId` as `Schema.optional(Schema.String)` | **Branded `Schema.optional(ThreadId)` / `Schema.optional(MessageId)`**, same rationale. These fields *are* t3code thread/message IDs — weakening them loses type safety across the seam. `WeaveNodeDispatchCommand.childThreadId` is non-optional `ThreadId` (set at dispatch time). |
+| Spec sketch                                                                                                                      | Codebase convention we follow                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `export const WeaveRunId = Schema.String.pipe(Schema.brand("WeaveRunId"))`                                                       | `makeEntityId("WeaveRunId")` in [`baseSchemas.ts`](../../../../packages/contracts/src/baseSchemas.ts) — trimmed non-empty string                                                                                                                                                     |
+| `const Cmd = <K, P>(kind: K, payload: P) => Schema.Struct({ kind: Schema.Literal(kind), commandId: Schema.String, ...payload })` | Explicit `Schema.Struct({ type: Schema.Literal("..."), commandId: CommandId, ..., createdAt: IsoDateTime })` — matches `ThreadCreateCommand` etc.                                                                                                                                    |
+| `const Evt = <K, P>(kind, payload) => Schema.Struct({ type, aggregate, weaveRunId, occurredAt, ...payload })`                    | Payload-only structs (e.g. `WeaveCreatedPayload`); wrapped with `EventBaseFields` in the `OrchestrationEvent` union — matches `ThreadCreatedPayload` etc.                                                                                                                            |
+| `OrchestrationDomainEvent = Schema.Union(ThreadDomainEvent, WeaveDomainEvent)`                                                   | No `ThreadDomainEvent` exists. Extend `OrchestrationEvent` (the real master union), `OrchestrationAggregateKind`, `OrchestrationEventType`, and the `aggregateId` union.                                                                                                             |
+| `aggregate: "thread" \| "weave"` discriminant                                                                                    | `aggregateKind: "project" \| "thread"` (extend with `"weave"`); `aggregateId` is `Schema.Union([ProjectId, ThreadId])` (extend with `WeaveRunId`).                                                                                                                                   |
+| Free-form `Schema.String` timestamps                                                                                             | `IsoDateTime` from `baseSchemas.ts`                                                                                                                                                                                                                                                  |
+| Free-form `Schema.String` text fields                                                                                            | `TrimmedNonEmptyString` where non-empty is meaningful (title, question, etc.); `Schema.String` for multi-line content (Markdown descriptions, semantics, surface)                                                                                                                    |
+| Spec's `projectId: Schema.String` on `WeaveRun` / `WeaveCreateCommand` / `WeaveCreatedPayload`                                   | **Branded `ProjectId` from `baseSchemas.ts`.** All branded IDs live there (not in `orchestration.ts`), so there is no import-cycle risk; `weave.ts` and `orchestration.ts` both import from `baseSchemas.ts` as peers.                                                               |
+| Spec's `parentThreadId` / `parentMessageId` / `childThreadId` as `Schema.optional(Schema.String)`                                | **Branded `Schema.optional(ThreadId)` / `Schema.optional(MessageId)`**, same rationale. These fields _are_ t3code thread/message IDs — weakening them loses type safety across the seam. `WeaveNodeDispatchCommand.childThreadId` is non-optional `ThreadId` (set at dispatch time). |
 
 The spec's **field names, struct names, enum values, command/event names** are all kept verbatim. Only the **surrounding plumbing** is adjusted to match existing codebase discipline.
 
@@ -32,13 +32,13 @@ The spec's **field names, struct names, enum values, command/event names** are a
 
 ## File structure
 
-| File | Change | Responsibility |
-|---|---|---|
-| `packages/contracts/src/weave.ts` | **NEW** | All Weave-specific branded IDs, enums, structs, commands, event payloads, and `WeaveCommand` / `WeaveEventPayload` unions. No runtime code. |
-| `packages/contracts/src/orchestration.ts` | Modify | Extend `ProviderInteractionMode`, `OrchestrationAggregateKind`, `OrchestrationEventType`, the `aggregateId` union inside `EventBaseFields`, the `DispatchableClientOrchestrationCommand` / `InternalOrchestrationCommand` / `OrchestrationCommand` unions, and the `OrchestrationEvent` union. Import weave schemas from `./weave.ts`. |
-| `packages/contracts/src/index.ts` | Modify | `export * from "./weave.ts"` — one line. |
-| `packages/contracts/src/weave.test.ts` | **NEW** | Round-trip encode/decode tests for every Weave schema; default-value tests; cross-variant decode tests via `OrchestrationCommand` / `OrchestrationEvent`. |
-| `packages/contracts/src/orchestration.test.ts` | Modify | Two new `it.effect` cases: (1) `ProviderInteractionMode` accepts `"weave"`; (2) `OrchestrationEvent` decodes a weave variant with `aggregateKind: "weave"`. |
+| File                                           | Change  | Responsibility                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/src/weave.ts`              | **NEW** | All Weave-specific branded IDs, enums, structs, commands, event payloads, and `WeaveCommand` / `WeaveEventPayload` unions. No runtime code.                                                                                                                                                                                            |
+| `packages/contracts/src/orchestration.ts`      | Modify  | Extend `ProviderInteractionMode`, `OrchestrationAggregateKind`, `OrchestrationEventType`, the `aggregateId` union inside `EventBaseFields`, the `DispatchableClientOrchestrationCommand` / `InternalOrchestrationCommand` / `OrchestrationCommand` unions, and the `OrchestrationEvent` union. Import weave schemas from `./weave.ts`. |
+| `packages/contracts/src/index.ts`              | Modify  | `export * from "./weave.ts"` — one line.                                                                                                                                                                                                                                                                                               |
+| `packages/contracts/src/weave.test.ts`         | **NEW** | Round-trip encode/decode tests for every Weave schema; default-value tests; cross-variant decode tests via `OrchestrationCommand` / `OrchestrationEvent`.                                                                                                                                                                              |
+| `packages/contracts/src/orchestration.test.ts` | Modify  | Two new `it.effect` cases: (1) `ProviderInteractionMode` accepts `"weave"`; (2) `OrchestrationEvent` decodes a weave variant with `aggregateKind: "weave"`.                                                                                                                                                                            |
 
 **No other files change.** Nothing in `apps/server`, `apps/web`, `packages/shared`, or anywhere else. Schema-only by t3code convention ([AGENTS.md line 31](../../../../AGENTS.md)).
 
@@ -47,6 +47,7 @@ The spec's **field names, struct names, enum values, command/event names** are a
 ## Task 1: Extend `ProviderInteractionMode` with `"weave"`
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts:93`
 - Modify: `packages/contracts/src/orchestration.test.ts`
 
@@ -105,6 +106,7 @@ git commit -m "feat(contracts): add 'weave' to ProviderInteractionMode literal u
 ## Task 2: Create `weave.ts` with branded IDs and index export
 
 **Files:**
+
 - Create: `packages/contracts/src/weave.ts`
 - Create: `packages/contracts/src/weave.test.ts`
 - Modify: `packages/contracts/src/index.ts`
@@ -235,6 +237,7 @@ git commit -m "feat(contracts): add weave branded ids (WeaveRunId, WeaveNodeId, 
 ## Task 3: Add Weave enums
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -318,47 +321,43 @@ Append to `packages/contracts/src/weave.ts` (after the branded IDs):
 ```ts
 // Enums — literal unions for status and taxonomy values.
 export const WeaveRunStatus = Schema.Literals([
-  "draft",      // created, blueprint not yet compiled
-  "reviewing",  // blueprint compiled, awaiting approval
-  "running",    // approved, scheduler walking the DAG
-  "paused",     // user paused OR replan in progress
-  "complete",   // final phase approved
-  "aborted",    // user exit before complete
+  "draft", // created, blueprint not yet compiled
+  "reviewing", // blueprint compiled, awaiting approval
+  "running", // approved, scheduler walking the DAG
+  "paused", // user paused OR replan in progress
+  "complete", // final phase approved
+  "aborted", // user exit before complete
 ]);
 export type WeaveRunStatus = typeof WeaveRunStatus.Type;
 
 export const WeaveNodeStatus = Schema.Literals([
-  "pending",    // ancestors not ready
-  "ready",      // schedulable
-  "running",    // child thread active
-  "verified",   // verifier green
-  "failed",     // verifier red, ladder exhausted
-  "paused",     // intervene or global replan
+  "pending", // ancestors not ready
+  "ready", // schedulable
+  "running", // child thread active
+  "verified", // verifier green
+  "failed", // verifier red, ladder exhausted
+  "paused", // intervene or global replan
 ]);
 export type WeaveNodeStatus = typeof WeaveNodeStatus.Type;
 
 export const WeaveNodeKind = Schema.Literals([
-  "raw",        // feature implementation (default)
-  "scaffold",   // project structure, tooling
-  "contract",   // interface-authoring
-  "utility",    // shared helper / migration / fixture
+  "raw", // feature implementation (default)
+  "scaffold", // project structure, tooling
+  "contract", // interface-authoring
+  "utility", // shared helper / migration / fixture
 ]);
 export type WeaveNodeKind = typeof WeaveNodeKind.Type;
 
-export const WeavePhaseApproval = Schema.Literals([
-  "pending",
-  "approved",
-  "rejected",
-]);
+export const WeavePhaseApproval = Schema.Literals(["pending", "approved", "rejected"]);
 export type WeavePhaseApproval = typeof WeavePhaseApproval.Type;
 
 export const DecisionPreAuthScope = Schema.Literals([
-  "library",    // tooling / package choices
-  "naming",     // identifiers, conventions
-  "copy",       // user-facing text
-  "auth",       // authentication / authorization
-  "data",       // schema decisions, storage shape
-  "cost",       // billing-adjacent
+  "library", // tooling / package choices
+  "naming", // identifiers, conventions
+  "copy", // user-facing text
+  "auth", // authentication / authorization
+  "data", // schema decisions, storage shape
+  "cost", // billing-adjacent
 ]);
 export type DecisionPreAuthScope = typeof DecisionPreAuthScope.Type;
 ```
@@ -381,6 +380,7 @@ git commit -m "feat(contracts): add weave enums (RunStatus, NodeStatus, NodeKind
 ## Task 4: Add leaf struct schemas (Scope, WeaveContract, WeavePhase, WeaveDecision)
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -391,12 +391,7 @@ These four structs have no forward references among themselves; they're leaves i
 Append to `packages/contracts/src/weave.test.ts`:
 
 ```ts
-import {
-  Scope,
-  WeaveContract,
-  WeaveDecision,
-  WeavePhase,
-} from "./weave.ts";
+import { Scope, WeaveContract, WeaveDecision, WeavePhase } from "./weave.ts";
 
 const decodeScope = Schema.decodeUnknownEffect(Scope);
 const decodeWeaveContract = Schema.decodeUnknownEffect(WeaveContract);
@@ -436,10 +431,7 @@ it.effect("round-trips a WeaveContract with conformanceTestPath", () =>
       semantics: "",
       conformanceTestPath: ".weave/contracts/node-2/conformance.test.ts",
     });
-    assert.strictEqual(
-      parsed.conformanceTestPath,
-      ".weave/contracts/node-2/conformance.test.ts",
-    );
+    assert.strictEqual(parsed.conformanceTestPath, ".weave/contracts/node-2/conformance.test.ts");
   }),
 );
 
@@ -576,6 +568,7 @@ git commit -m "feat(contracts): add Scope, WeaveContract, WeavePhase, WeaveDecis
 ## Task 5: Add `WeaveNode` struct
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -718,6 +711,7 @@ git commit -m "feat(contracts): add WeaveNode struct"
 ## Task 6: Add `Blueprint` struct
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -855,6 +849,7 @@ git commit -m "feat(contracts): add Blueprint struct and BlueprintSource enum"
 ## Task 7: Add `WeaveRun` struct
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -1025,6 +1020,7 @@ git commit -m "feat(contracts): add WeaveRun aggregate struct"
 ## Task 8: Add client-dispatchable Weave commands
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -1297,6 +1293,7 @@ git commit -m "feat(contracts): add client-dispatchable weave commands (create, 
 ## Task 9: Add internal Weave commands
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -1498,6 +1495,7 @@ git commit -m "feat(contracts): add internal weave commands (compile, dispatch, 
 ## Task 10: Add Weave event payloads
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts`
 - Modify: `packages/contracts/src/weave.test.ts`
 
@@ -1544,9 +1542,7 @@ const decodeWeaveBlueprintApprovedPayload = Schema.decodeUnknownEffect(
 const decodeWeaveNodeDispatchedPayload = Schema.decodeUnknownEffect(WeaveNodeDispatchedPayload);
 const decodeWeaveNodeVerifiedPayload = Schema.decodeUnknownEffect(WeaveNodeVerifiedPayload);
 const decodeWeaveNodeFailedPayload = Schema.decodeUnknownEffect(WeaveNodeFailedPayload);
-const decodeWeaveDecisionResolvedPayload = Schema.decodeUnknownEffect(
-  WeaveDecisionResolvedPayload,
-);
+const decodeWeaveDecisionResolvedPayload = Schema.decodeUnknownEffect(WeaveDecisionResolvedPayload);
 const decodeWeavePhaseApprovedPayload = Schema.decodeUnknownEffect(WeavePhaseApprovedPayload);
 const decodeWeaveExitedPayload = Schema.decodeUnknownEffect(WeaveExitedPayload);
 
@@ -1789,6 +1785,7 @@ git commit -m "feat(contracts): add weave event payload schemas"
 ## Task 11: Extend `OrchestrationAggregateKind` and the `aggregateId` union
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts`
 - Modify: `packages/contracts/src/orchestration.test.ts`
 
@@ -1869,6 +1866,7 @@ git commit -m "feat(contracts): extend OrchestrationAggregateKind and aggregateI
 ## Task 12: Extend `OrchestrationEventType` and `OrchestrationEvent` with Weave variants
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts`
 - Modify: `packages/contracts/src/orchestration.test.ts`
 
@@ -2099,6 +2097,7 @@ git commit -m "feat(contracts): extend OrchestrationEvent union with weave varia
 ## Task 13: Extend `OrchestrationCommand` with Weave variants
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts`
 - Modify: `packages/contracts/src/orchestration.test.ts`
 
@@ -2252,6 +2251,7 @@ git commit -m "feat(contracts): extend OrchestrationCommand unions with weave va
 ## Task 14: Repo-wide Definition-of-Done gate
 
 **Files:**
+
 - None (validation only)
 
 Run every check the [AGENTS.md](../../../../AGENTS.md) task-completion contract demands, from the repo root. These exercise the full monorepo (server / web / shared / desktop / marketing) to confirm the contract extensions don't break any consumer.
@@ -2290,7 +2290,7 @@ Expected: `1`.
 
 Run from the repo root: `grep -En 'console|process\.|setTimeout|setInterval|fetch|import.*fs|import.*path' packages/contracts/src/weave.ts || echo "clean"`
 
-Expected: `clean`. The `weave.ts` file must contain only Schema.* definitions and type aliases — no runtime code. This is the contract [AGENTS.md:31](../../../../AGENTS.md) imposes on the `packages/contracts` package.
+Expected: `clean`. The `weave.ts` file must contain only Schema.\* definitions and type aliases — no runtime code. This is the contract [AGENTS.md:31](../../../../AGENTS.md) imposes on the `packages/contracts` package.
 
 - [ ] **Step 14.7: Verify v0.1 spec §1.10 definition of done**
 
