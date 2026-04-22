@@ -6,7 +6,7 @@
 
 **Goal:** Add three pure TypeScript files under `apps/server/src/orchestration/` — `weaveProjector.ts`, `weaveDecider.ts`, `weaveCommandInvariants.ts` — that implement the Weave Run state machine as plain functions over the schemas from Slice 1. No IO, no side effects, no integration with the main decider/projector. Output is fully unit-tested in isolation.
 
-**Architecture:** Slice 2 is deliberately pure and **does not replace any apps/server Slice 1 stubs** — those get removed in Slice 3 when the engine, scheduler, and planner wire these pure functions into the real event loop. Slice 2 introduces a new internal projection type `WeaveRunProjection` (per-run; not part of `OrchestrationReadModel`), a projector `(state, event) => state` that evolves it across the 9 weave event types, a command-invariants helper layer, and a decider `(state, command) => events[] | error` that implements the v0.1 decider table from [v0.1-spec.md §2.3](../../../../../docs/v0.1-spec.md#23-decider-cases-v01-subset). Tests follow the existing `apps/server/src/orchestration/*.test.ts` conventions: plain `vitest` (`describe/it/expect`) with `await Effect.runPromise(...)`.
+**Architecture:** Slice 2 is deliberately pure and **does not replace any apps/server Slice 1 stubs** — those get removed in Slice 3 when the engine, scheduler, and planner wire these pure functions into the real event loop. Slice 2 introduces a new internal projection type `WeaveRunProjection` (per-run; not part of `OrchestrationReadModel`), a projector `(state, event) => state` that evolves it across the 9 weave event types, a command-invariants helper layer, and a decider `(state, command) => events[] | error` that implements the v0.1 decider table from [v0.1-spec.md §2.3](../../weave/v0.1-spec.md#23-decider-cases-v01-subset). Tests follow the existing `apps/server/src/orchestration/*.test.ts` conventions: plain `vitest` (`describe/it/expect`) with `await Effect.runPromise(...)`.
 
 **Tech Stack:** TypeScript, Effect 4 beta (`effect` catalog dep), `@t3tools/contracts` (Slice 1 schemas), `vitest` via `bun run test`, `oxlint` / `oxfmt`.
 
@@ -14,7 +14,7 @@
 
 ## Context: Slice 1 stubs and Slice 2's non-integration
 
-Slice 1 left six stubs in `apps/server/src` to make `bun typecheck` pass after the contracts extension. Slice 2 is **pure** ([spec §2.7](../../../../../docs/v0.1-spec.md#27-definition-of-done)) and **does not wire anything into the main event loop** — so none of these stubs are removed by Slice 2. They're listed here with their Slice-3 disposition so the plan is explicit.
+Slice 1 left six stubs in `apps/server/src` to make `bun typecheck` pass after the contracts extension. Slice 2 is **pure** ([spec §2.7](../../weave/v0.1-spec.md#27-definition-of-done)) and **does not wire anything into the main event loop** — so none of these stubs are removed by Slice 2. They're listed here with their Slice-3 disposition so the plan is explicit.
 
 | Stub | File:line | Why Slice 2 does NOT touch it | When it gets replaced |
 |---|---|---|---|
@@ -38,8 +38,9 @@ Root cause of Slice 1's mid-execution divergence: subagent worktree operations s
 ```
 ## Pre-flight HEAD check (MANDATORY — run first, stop on mismatch)
 
-cd /Users/nikrabaev/Work/personal/ai-deep-plan/t3code/.claude/worktrees/cranky-blackwell-f25d64
+cd /Users/nikrabaev/Work/personal/ai-deep-plan/t3code
 git rev-parse HEAD
+git branch --show-current            # must be `nikrabaev/weave`
 git log --oneline HEAD~3..HEAD
 
 The top three commits MUST match (newest first):
@@ -71,25 +72,22 @@ The controller fills `<EXPECTED_SHA_AND_TITLE_n>` per task based on the plan's t
 
 ---
 
-## Branch setup (prep, before Task 1)
+## Branch setup (already in place — read-only verification)
 
-Create a new feature branch off `main` (which now includes the Slice 1 merge):
+Slice 2 executes on `nikrabaev/weave`, the single canonical branch for all Weave work. `main` tracks `origin/main` (upstream t3code) and is NOT touched by Slice 2. The plan document that defines this slice is already committed at HEAD (`2e2ca5f1 docs: add Weave v0.1 Slice 2 …`), so Task 1 begins directly on top of it.
 
-```bash
-cd /Users/nikrabaev/Work/personal/ai-deep-plan/t3code/.claude/worktrees/cranky-blackwell-f25d64
-git checkout main
-git pull --ff-only    # if you want to pick up anything from origin/main first; optional
-git checkout -b claude/weave-slice-2
-```
-
-Then commit this plan document as the first commit on the new branch:
+Verify before starting Task 1:
 
 ```bash
-git add docs/superpowers/plans/2026-04-22-weave-v01-slice-2-decider-projector.md
-git commit -m "docs: add Weave v0.1 Slice 2 (decider/projector/invariants) implementation plan"
+cd /Users/nikrabaev/Work/personal/ai-deep-plan/t3code
+git branch --show-current          # must be `nikrabaev/weave`
+git log --oneline HEAD~1..HEAD     # must show `2e2ca5f1 docs: add Weave v0.1 Slice 2 …`
+git tag --list weave-v0.1-slice-1  # must show the tag (sanity: Slice 1 close intact)
 ```
 
-All subsequent tasks build on `claude/weave-slice-2`. At Slice 2 close, merge with `--no-ff` to `main` and tag `weave-v0.1-slice-2` (mirror of Slice 1's close).
+If `nikrabaev/weave` is NOT checked out, stop — the controller needs to switch branches before proceeding. Do not create a new branch.
+
+At Slice 2 close, tag the final commit `weave-v0.1-slice-2` on `nikrabaev/weave`. No merge to main — the branch is self-contained. (Mirrors the Slice 1 close tag pattern; differs only in that Slice 1 also performed a `--no-ff` merge to `main`, which is obsolete now that Weave work is segregated.)
 
 ---
 
@@ -104,7 +102,7 @@ All subsequent tasks build on `claude/weave-slice-2`. At Slice 2 close, merge wi
 | `apps/server/src/orchestration/weaveDecider.ts` | **NEW** | `decideWeaveCommand({ projection, command })` — switch on command type, calls invariants, emits `PlannedWeaveEvent[]`. |
 | `apps/server/src/orchestration/weaveDecider.test.ts` | **NEW** | Per-command cases: happy path + ≥1 invariant violation per command. |
 
-**No existing files are modified** in Slice 2. `decider.ts`, `projector.ts`, `commandInvariants.ts`, and all layers under `Layers/` remain unchanged. This is the spec-mandated scope ([spec §2.1](../../../../../docs/v0.1-spec.md#21-files)).
+**No existing files are modified** in Slice 2. `decider.ts`, `projector.ts`, `commandInvariants.ts`, and all layers under `Layers/` remain unchanged. This is the spec-mandated scope ([spec §2.1](../../weave/v0.1-spec.md#21-files)).
 
 ### Key type shapes
 
@@ -2498,7 +2496,7 @@ Expected: 10/10 packages clean. The new files are pure TS under `apps/server/src
 
 `bun run test` from repo root.
 
-Expected: all tests pass. Note the Slice-1 carry-over: `apps/server/src/git/GitManager.test.ts` has pre-existing environmental failures (timeouts with real git operations). Those are not regressions from Slice 2. Verify with `git log --oneline main..HEAD -- 'apps/server/src/git/'` — should be empty (no files in that subtree touched by this slice).
+Expected: all tests pass. Note the Slice-1 carry-over: `apps/server/src/git/GitManager.test.ts` has pre-existing environmental failures (timeouts with real git operations). Those are not regressions from Slice 2. Verify with `git log --oneline weave-v0.1-slice-1..HEAD -- 'apps/server/src/git/'` — should be empty (no files in that subtree touched by this slice).
 
 - [ ] **Step 11.3: Lint**
 
@@ -2512,7 +2510,7 @@ Expected: 0 errors. Pre-existing warnings in `apps/web/src/**` unrelated.
 
 Expected: no files changed. If files are reformatted, commit as `chore(server): apply oxfmt`.
 
-- [ ] **Step 11.5: Spec DoD verification ([spec §2.7](../../../../../docs/v0.1-spec.md#27-definition-of-done))**
+- [ ] **Step 11.5: Spec DoD verification ([spec §2.7](../../weave/v0.1-spec.md#27-definition-of-done))**
 
 - [ ] All pure; no IO. `grep -En 'console|process\.|setTimeout|setInterval|fetch|readFile|writeFile' apps/server/src/orchestration/weave*.ts` returns nothing.
 - [ ] No `Effect.sync` wrappers. `grep -n 'Effect.sync' apps/server/src/orchestration/weave*.ts` returns nothing.
@@ -2521,9 +2519,9 @@ Expected: no files changed. If files are reformatted, commit as `chore(server): 
 
 - [ ] **Step 11.6: Commit trail review**
 
-`git log --oneline main..HEAD`
+`git log --oneline weave-v0.1-slice-1..HEAD`
 
-Expected (top-of-branch → bottom, 11 or 12 commits depending on whether a fmt-fixup commit was needed):
+Expected (top-of-branch → bottom, 11 or 12 commits depending on whether a fmt-fixup commit was needed; the Slice 1 tag anchors the "new since Slice 1" range):
 
 ```
 [optional: chore(server): apply oxfmt]
@@ -2540,13 +2538,21 @@ feat(server): add WeaveRunProjection type and weave invariant helpers
 docs: add Weave v0.1 Slice 2 (decider/projector/invariants) implementation plan
 ```
 
-Slice 2 is complete. Next step (post-review): `git checkout main && git merge --no-ff claude/weave-slice-2 -m "feat(server): weave v0.1 slice 2 — decider + projector + invariants"` + `git tag weave-v0.1-slice-2`. Mirror of Slice 1 close.
+Slice 2 is complete. Close by tagging the final commit on `nikrabaev/weave`:
+
+```bash
+git tag weave-v0.1-slice-2
+# optional offsite backup:
+# git push origin nikrabaev/weave weave-v0.1-slice-2
+```
+
+No merge to `main` — all Weave work stays on `nikrabaev/weave` per the single-canonical-branch strategy. (`main` still tracks upstream t3code untouched.)
 
 ---
 
 ## Self-review summary
 
-- **Spec coverage** ([§Slice 2](../../../../../docs/v0.1-spec.md#slice-2--decider--projector--invariants-pure)): §2.1 files (six new, per-plan tasks 1, 2, 6 create the three pairs); §2.2 projection type (Task 1); §2.3 decider cases × 9 (Tasks 6–9 cover all 9 command types); §2.4 projector cases × 9 (Tasks 2–5 cover all 9 event types); §2.5 invariants (baked into Task 1 helpers + invoked across deciders); §2.6 tests (each task contributes tests + Task 10 is the integration/roundtrip); §2.7 DoD (Task 11).
+- **Spec coverage** ([§Slice 2](../../weave/v0.1-spec.md#slice-2--decider--projector--invariants-pure)): §2.1 files (six new, per-plan tasks 1, 2, 6 create the three pairs); §2.2 projection type (Task 1); §2.3 decider cases × 9 (Tasks 6–9 cover all 9 command types); §2.4 projector cases × 9 (Tasks 2–5 cover all 9 event types); §2.5 invariants (baked into Task 1 helpers + invoked across deciders); §2.6 tests (each task contributes tests + Task 10 is the integration/roundtrip); §2.7 DoD (Task 11).
 - **Carry-over handling:**
   - **Pre-flight HEAD checks** — mandated at every task-implementer prompt via the plan's "Pre-flight HEAD check protocol" section, with per-task expected-SHA fills from the controller.
   - **Slice 1 stubs** — each stub is listed with its Slice 3 disposition in the "Context" section; Slice 2 removes NONE of them (stays pure).
