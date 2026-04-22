@@ -1,7 +1,9 @@
 import type {
   Blueprint,
   IsoDateTime,
+  MessageId,
   OrchestrationEvent,
+  ProjectId,
   ThreadId,
   WeaveDecisionId,
   WeaveNodeId,
@@ -9,6 +11,8 @@ import type {
   WeavePhaseApproval,
   WeavePhaseId,
   WeaveRun,
+  WeaveRunId,
+  WeaveRunStatus,
 } from "@t3tools/contracts";
 import { Effect } from "effect";
 
@@ -48,7 +52,30 @@ export type WeaveOrchestrationEvent = Extract<
 
 // Factory for an empty projection from a newly-created WeaveRun.
 // Used by the `weave.created` case and by test fixtures.
-export function createEmptyWeaveProjection(run: WeaveRun): WeaveRunProjection {
+export function createEmptyWeaveProjection(params: {
+  readonly id: WeaveRunId;
+  readonly projectId: ProjectId;
+  readonly title: string;
+  readonly vision: string;
+  readonly parentThreadId?: ThreadId;
+  readonly parentMessageId?: MessageId;
+  readonly snapshotContent?: string;
+  readonly status: WeaveRunStatus;
+  readonly concurrencyCap: number;
+  readonly createdAt: IsoDateTime;
+}): WeaveRunProjection {
+  const run: WeaveRun = {
+    id: params.id,
+    projectId: params.projectId,
+    title: params.title,
+    vision: params.vision,
+    parentThreadId: params.parentThreadId,
+    parentMessageId: params.parentMessageId,
+    snapshotContent: params.snapshotContent,
+    status: params.status,
+    concurrencyCap: params.concurrencyCap as never,
+    createdAt: params.createdAt,
+  };
   return {
     run,
     currentBlueprint: null,
@@ -71,14 +98,49 @@ export function projectWeaveEvent(
   state: WeaveRunProjection | null,
   event: WeaveOrchestrationEvent,
 ): Effect.Effect<WeaveRunProjection, OrchestrationProjectorDecodeError> {
-  // Populated in Tasks 2–5. For now, every event type is a no-op modulo null.
-  if (state === null) {
-    return Effect.fail(
-      new OrchestrationProjectorDecodeError({
-        eventType: event.type,
-        issue: `weave event ${event.type} requires a pre-existing projection (null received)`,
-      }),
-    );
+  switch (event.type) {
+    case "weave.created": {
+      if (state !== null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave run '${state.run.id}' already exists — weave.created requires null state.`,
+          }),
+        );
+      }
+      const { payload } = event;
+      return Effect.succeed(
+        createEmptyWeaveProjection({
+          id: payload.weaveRunId,
+          projectId: payload.projectId,
+          title: payload.title,
+          vision: payload.vision,
+          ...(payload.parentThreadId !== undefined && {
+            parentThreadId: payload.parentThreadId,
+          }),
+          ...(payload.parentMessageId !== undefined && {
+            parentMessageId: payload.parentMessageId,
+          }),
+          ...(payload.snapshotContent !== undefined && {
+            snapshotContent: payload.snapshotContent,
+          }),
+          status: "draft",
+          concurrencyCap: 1,
+          createdAt: payload.occurredAt,
+        }),
+      );
+    }
+    default: {
+      // Placeholder: Tasks 3–5 add the remaining 8 event cases.
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave event ${event.type} requires a pre-existing projection (null received)`,
+          }),
+        );
+      }
+      return Effect.succeed(state);
+    }
   }
-  return Effect.succeed(state);
 }
