@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { IsoDateTime, NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 // Branded IDs — mirror the `makeEntityId` pattern in baseSchemas.ts
 // (trimmed non-empty strings with a nominal brand).
@@ -117,3 +117,25 @@ export const WeaveDecision = Schema.Struct({
   resolution: Schema.optional(WeaveDecisionResolution),
 });
 export type WeaveDecision = typeof WeaveDecision.Type;
+
+// WeaveNode — a unit of work. One Node = one child Thread in later slices.
+// Optional fields (advisoryDeps, childThreadId, worktreePath, failureNote)
+// are absent until dispatched or resolved.
+export const WeaveNode = Schema.Struct({
+  id: WeaveNodeId,
+  title: TrimmedNonEmptyString,
+  description: Schema.String,
+  kind: WeaveNodeKind,
+  phaseId: WeavePhaseId,
+  scope: Scope,
+  inputContractIds: Schema.Array(WeaveContractId),
+  outputContractIds: Schema.Array(WeaveContractId),
+  verifierDescription: Schema.String,
+  dependsOn: Schema.Array(WeaveNodeId),
+  advisoryDeps: Schema.optional(Schema.Array(WeaveNodeId)),
+  status: WeaveNodeStatus,
+  childThreadId: Schema.optional(ThreadId),
+  worktreePath: Schema.optional(Schema.String),
+  failureNote: Schema.optional(Schema.String),
+});
+export type WeaveNode = typeof WeaveNode.Type;

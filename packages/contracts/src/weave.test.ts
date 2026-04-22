@@ -208,3 +208,76 @@ it.effect("round-trips a WeaveDecision with a user-supplied resolution", () =>
     assert.strictEqual(parsed.preAuthScope, "library");
   }),
 );
+
+import { WeaveNode } from "./weave.ts";
+
+const decodeWeaveNode = Schema.decodeUnknownEffect(WeaveNode);
+
+it.effect("round-trips a minimal pending WeaveNode", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNode({
+      id: "node-1",
+      title: "Scaffold server package",
+      description: "Create apps/server skeleton.",
+      kind: "scaffold",
+      phaseId: "phase-1",
+      scope: { readSet: ["**/*.ts"], writeSet: ["apps/server/src/**"] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "Typecheck passes.",
+      dependsOn: [],
+      status: "pending",
+    });
+    assert.strictEqual(parsed.kind, "scaffold");
+    assert.strictEqual(parsed.status, "pending");
+    assert.strictEqual(parsed.advisoryDeps, undefined);
+    assert.strictEqual(parsed.childThreadId, undefined);
+    assert.strictEqual(parsed.worktreePath, undefined);
+    assert.strictEqual(parsed.failureNote, undefined);
+  }),
+);
+
+it.effect("round-trips a running WeaveNode with child-thread metadata", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNode({
+      id: "node-2",
+      title: "Implement auth",
+      description: "",
+      kind: "raw",
+      phaseId: "phase-2",
+      scope: { readSet: [], writeSet: ["apps/server/src/auth/**"] },
+      inputContractIds: ["contract-1"],
+      outputContractIds: [],
+      verifierDescription: "bun run test passes.",
+      dependsOn: ["node-1"],
+      advisoryDeps: ["node-0"],
+      status: "running",
+      childThreadId: "thread-abc",
+      worktreePath: "/tmp/wt/node-2",
+    });
+    assert.deepStrictEqual(parsed.dependsOn, ["node-1"]);
+    assert.deepStrictEqual(parsed.advisoryDeps, ["node-0"]);
+    assert.strictEqual(parsed.childThreadId, "thread-abc");
+    assert.strictEqual(parsed.worktreePath, "/tmp/wt/node-2");
+  }),
+);
+
+it.effect("round-trips a failed WeaveNode with a failureNote", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNode({
+      id: "node-3",
+      title: "Broken",
+      description: "",
+      kind: "raw",
+      phaseId: "phase-1",
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [],
+      status: "failed",
+      failureNote: "Contract amendment needed.",
+    });
+    assert.strictEqual(parsed.failureNote, "Contract amendment needed.");
+  }),
+);
