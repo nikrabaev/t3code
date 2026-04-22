@@ -552,3 +552,85 @@ it.effect("accepts 'weave' as an orchestration aggregate kind", () =>
     assert.strictEqual(parsed, "weave");
   }),
 );
+
+it.effect("decodes a weave.created event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 1,
+      eventId: "event-w1",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.created",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: "cmd-1",
+      causationEventId: null,
+      correlationId: "cmd-1",
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        projectId: "project-1",
+        title: "Add blog",
+        vision: "# Goal",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.created");
+    assert.strictEqual(event.aggregateKind, "weave");
+    if (event.type === "weave.created") {
+      assert.strictEqual(event.payload.weaveRunId, "run-1");
+    }
+  }),
+);
+
+it.effect("decodes a weave.blueprint-approved event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 2,
+      eventId: "event-w2",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.blueprint-approved",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: "cmd-2",
+      causationEventId: null,
+      correlationId: "cmd-2",
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        version: 1,
+        concurrencyCap: 1,
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.blueprint-approved");
+    if (event.type === "weave.blueprint-approved") {
+      assert.strictEqual(event.payload.concurrencyCap, 1);
+    }
+  }),
+);
+
+it.effect("decodes a weave.exited event via OrchestrationEvent", () =>
+  Effect.gen(function* () {
+    const event = yield* decodeOrchestrationEvent({
+      sequence: 3,
+      eventId: "event-w3",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.exited",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+      commandId: "cmd-3",
+      causationEventId: null,
+      correlationId: "cmd-3",
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        reason: "complete",
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(event.type, "weave.exited");
+    if (event.type === "weave.exited") {
+      assert.strictEqual(event.payload.reason, "complete");
+    }
+  }),
+);

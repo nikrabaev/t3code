@@ -20,7 +20,18 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas.ts";
-import { WeaveRunId } from "./weave.ts";
+import {
+  WeaveBlueprintApprovedPayload,
+  WeaveBlueprintCompiledPayload,
+  WeaveCreatedPayload,
+  WeaveDecisionResolvedPayload,
+  WeaveExitedPayload,
+  WeaveNodeDispatchedPayload,
+  WeaveNodeFailedPayload,
+  WeaveNodeVerifiedPayload,
+  WeavePhaseApprovedPayload,
+  WeaveRunId,
+} from "./weave.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -760,6 +771,16 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
   "thread.activity-appended",
+  // Weave events (Slice 1)
+  "weave.created",
+  "weave.blueprint-compiled",
+  "weave.blueprint-approved",
+  "weave.node-dispatched",
+  "weave.node-verified",
+  "weave.node-failed",
+  "weave.decision-resolved",
+  "weave.phase-approved",
+  "weave.exited",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -1065,6 +1086,52 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.activity-appended"),
     payload: ThreadActivityAppendedPayload,
+  }),
+  // --- Weave events ---
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.created"),
+    payload: WeaveCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.blueprint-compiled"),
+    payload: WeaveBlueprintCompiledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.blueprint-approved"),
+    payload: WeaveBlueprintApprovedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.node-dispatched"),
+    payload: WeaveNodeDispatchedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.node-verified"),
+    payload: WeaveNodeVerifiedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.node-failed"),
+    payload: WeaveNodeFailedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.decision-resolved"),
+    payload: WeaveDecisionResolvedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.phase-approved"),
+    payload: WeavePhaseApprovedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.exited"),
+    payload: WeaveExitedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;
