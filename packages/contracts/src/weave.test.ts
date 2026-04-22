@@ -583,3 +583,99 @@ it.effect("WeaveDispatchableCommand union decodes every variant", () =>
     assert.strictEqual(exit.type, "weave.exit");
   }),
 );
+
+import {
+  WeaveBlueprintCompileCommand,
+  WeaveInternalCommand,
+  WeaveNodeDispatchCommand,
+  WeaveNodeFailedCommand,
+  WeaveNodeVerifiedCommand,
+} from "./weave.ts";
+
+const decodeWeaveBlueprintCompile = Schema.decodeUnknownEffect(WeaveBlueprintCompileCommand);
+const decodeWeaveNodeDispatch = Schema.decodeUnknownEffect(WeaveNodeDispatchCommand);
+const decodeWeaveNodeVerified = Schema.decodeUnknownEffect(WeaveNodeVerifiedCommand);
+const decodeWeaveNodeFailed = Schema.decodeUnknownEffect(WeaveNodeFailedCommand);
+const decodeWeaveInternal = Schema.decodeUnknownEffect(WeaveInternalCommand);
+
+it.effect("decodes weave.blueprint.compile with reason", () =>
+  Effect.gen(function* () {
+    for (const reason of ["initial", "amendment", "redesign"] as const) {
+      const parsed = yield* decodeWeaveBlueprintCompile({
+        type: "weave.blueprint.compile",
+        commandId: "cmd-c1",
+        weaveRunId: "run-1",
+        reason,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      });
+      assert.strictEqual(parsed.reason, reason);
+    }
+  }),
+);
+
+it.effect("decodes weave.node.dispatch", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeDispatch({
+      type: "weave.node.dispatch",
+      commandId: "cmd-d1",
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      childThreadId: "thread-xyz",
+      worktreePath: "/tmp/wt",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.childThreadId, "thread-xyz");
+    assert.strictEqual(parsed.worktreePath, "/tmp/wt");
+  }),
+);
+
+it.effect("decodes weave.node.verified", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeVerified({
+      type: "weave.node.verified",
+      commandId: "cmd-v1",
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      verifierOutcome: "tests-passed",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.verifierOutcome, "tests-passed");
+  }),
+);
+
+it.effect("decodes weave.node.failed with reason", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeFailed({
+      type: "weave.node.failed",
+      commandId: "cmd-f1",
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      reason: "Verifier exited with code 1",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.reason, "Verifier exited with code 1");
+  }),
+);
+
+it.effect("WeaveInternalCommand union decodes every variant", () =>
+  Effect.gen(function* () {
+    const compile = yield* decodeWeaveInternal({
+      type: "weave.blueprint.compile",
+      commandId: "cmd-u3",
+      weaveRunId: "run-1",
+      reason: "initial",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(compile.type, "weave.blueprint.compile");
+
+    const failed = yield* decodeWeaveInternal({
+      type: "weave.node.failed",
+      commandId: "cmd-u4",
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      reason: "x",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(failed.type, "weave.node.failed");
+  }),
+);

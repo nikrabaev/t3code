@@ -259,3 +259,62 @@ export const WeaveDispatchableCommand = Schema.Union([
   WeaveExitCommand,
 ]);
 export type WeaveDispatchableCommand = typeof WeaveDispatchableCommand.Type;
+
+// --- Internal (server-only) Weave commands ---
+// Emitted by WeavePlanner, WeaveScheduler, WeaveContractConformer reactors
+// in Slice 3. Must not be accepted from the client.
+
+export const WeaveBlueprintCompileReason = Schema.Literals(["initial", "amendment", "redesign"]);
+export type WeaveBlueprintCompileReason = typeof WeaveBlueprintCompileReason.Type;
+
+export const WeaveBlueprintCompileCommand = Schema.Struct({
+  type: Schema.Literal("weave.blueprint.compile"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  reason: WeaveBlueprintCompileReason,
+  createdAt: IsoDateTime,
+});
+export type WeaveBlueprintCompileCommand = typeof WeaveBlueprintCompileCommand.Type;
+
+export const WeaveNodeDispatchCommand = Schema.Struct({
+  type: Schema.Literal("weave.node.dispatch"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  childThreadId: ThreadId,
+  worktreePath: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type WeaveNodeDispatchCommand = typeof WeaveNodeDispatchCommand.Type;
+
+export const WeaveNodeVerifiedCommand = Schema.Struct({
+  type: Schema.Literal("weave.node.verified"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  verifierOutcome: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type WeaveNodeVerifiedCommand = typeof WeaveNodeVerifiedCommand.Type;
+
+export const WeaveNodeFailedCommand = Schema.Struct({
+  type: Schema.Literal("weave.node.failed"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  reason: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type WeaveNodeFailedCommand = typeof WeaveNodeFailedCommand.Type;
+
+export const WeaveInternalCommand = Schema.Union([
+  WeaveBlueprintCompileCommand,
+  WeaveNodeDispatchCommand,
+  WeaveNodeVerifiedCommand,
+  WeaveNodeFailedCommand,
+]);
+export type WeaveInternalCommand = typeof WeaveInternalCommand.Type;
+
+// Convenience: a union of every Weave command. Slice 2's decider takes this as input.
+export const WeaveCommand = Schema.Union([WeaveDispatchableCommand, WeaveInternalCommand]);
+export type WeaveCommand = typeof WeaveCommand.Type;
