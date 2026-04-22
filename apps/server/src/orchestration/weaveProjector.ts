@@ -178,6 +178,57 @@ export function projectWeaveEvent(
         },
       });
     }
+    case "weave.node-dispatched": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.node-dispatched requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeStatuses = new Map(state.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "running");
+      const nextChildThreads = new Map(state.childThreads);
+      nextChildThreads.set(payload.nodeId, {
+        threadId: payload.childThreadId,
+        worktreePath: payload.worktreePath,
+      });
+      return Effect.succeed({
+        ...state,
+        nodeStatuses: nextNodeStatuses,
+        childThreads: nextChildThreads,
+      });
+    }
+    case "weave.node-verified": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.node-verified requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeStatuses = new Map(state.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "verified");
+      return Effect.succeed({ ...state, nodeStatuses: nextNodeStatuses });
+    }
+    case "weave.node-failed": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.node-failed requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeStatuses = new Map(state.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "failed");
+      return Effect.succeed({ ...state, nodeStatuses: nextNodeStatuses });
+    }
     default: {
       // Placeholder: Tasks 3–5 add the remaining 8 event cases.
       if (state === null) {

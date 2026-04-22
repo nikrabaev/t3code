@@ -3,6 +3,7 @@ import {
   CommandId,
   EventId,
   ProjectId,
+  ThreadId,
   WeaveDecisionId,
   WeaveNodeId,
   WeavePhaseId,
@@ -269,5 +270,121 @@ describe("projectWeaveEvent — weave.blueprint-approved", () => {
     expect(result.run.status).toBe("running");
     expect(result.run.currentBlueprintVersion).toBe(BlueprintVersion.make(1));
     expect(result.run.concurrencyCap).toBe(1);
+  });
+});
+
+describe("projectWeaveEvent — node lifecycle", () => {
+  async function runningProjectionWithNode(nodeId: WeaveNodeId) {
+    const created = weaveEvent("weave.created", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      projectId: ProjectId.make("project-1"),
+      title: "X",
+      vision: "",
+      occurredAt: now,
+    });
+    const p0 = await Effect.runPromise(projectWeaveEvent(null, created));
+    const compiled = weaveEvent("weave.blueprint-compiled", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(1),
+      compiledBy: "planner",
+      occurredAt: now,
+      blueprint: {
+        version: BlueprintVersion.make(1),
+        nodes: [
+          {
+            id: nodeId,
+            title: "Only",
+            description: "",
+            kind: "scaffold",
+            phaseId: WeavePhaseId.make("phase-1"),
+            scope: { readSet: [], writeSet: [] },
+            inputContractIds: [],
+            outputContractIds: [],
+            verifierDescription: "",
+            dependsOn: [],
+            status: "pending",
+          },
+        ],
+        phases: [
+          {
+            id: WeavePhaseId.make("phase-1"),
+            ordinal: 0,
+            title: "Phase 1",
+            description: "",
+            approval: "pending",
+          },
+        ],
+        contracts: [],
+        decisions: [],
+        compiledAt: now,
+        compiledBy: "planner",
+      },
+    });
+    const p1 = await Effect.runPromise(projectWeaveEvent(p0, compiled));
+    const approved = weaveEvent("weave.blueprint-approved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(1),
+      concurrencyCap: 1,
+      occurredAt: now,
+    });
+    return await Effect.runPromise(projectWeaveEvent(p1, approved));
+  }
+
+  it("weave.node-dispatched flips nodeStatus to running and records childThreads entry", async () => {
+    const nodeId = WeaveNodeId.make("node-1");
+    const state = await runningProjectionWithNode(nodeId);
+    const dispatched = weaveEvent("weave.node-dispatched", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      nodeId,
+      childThreadId: ThreadId.make("thread-1"),
+      worktreePath: "/tmp/wt/node-1",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, dispatched));
+    expect(result.nodeStatuses.get(nodeId)).toBe("running");
+    expect(result.childThreads.get(nodeId)?.threadId).toBe(ThreadId.make("thread-1"));
+    expect(result.childThreads.get(nodeId)?.worktreePath).toBe("/tmp/wt/node-1");
+  });
+
+  it("weave.node-verified flips nodeStatus to verified", async () => {
+    const nodeId = WeaveNodeId.make("node-1");
+    const state = await runningProjectionWithNode(nodeId);
+    const dispatched = weaveEvent("weave.node-dispatched", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      nodeId,
+      childThreadId: ThreadId.make("thread-1"),
+      worktreePath: "/tmp/wt/node-1",
+      occurredAt: now,
+    });
+    const running = await Effect.runPromise(projectWeaveEvent(state, dispatched));
+    const verified = weaveEvent("weave.node-verified", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      nodeId,
+      verifierOutcome: "tests-passed",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(running, verified));
+    expect(result.nodeStatuses.get(nodeId)).toBe("verified");
+  });
+
+  it("weave.node-failed flips nodeStatus to failed", async () => {
+    const nodeId = WeaveNodeId.make("node-1");
+    const state = await runningProjectionWithNode(nodeId);
+    const dispatched = weaveEvent("weave.node-dispatched", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      nodeId,
+      childThreadId: ThreadId.make("thread-1"),
+      worktreePath: "/tmp/wt/node-1",
+      occurredAt: now,
+    });
+    const running = await Effect.runPromise(projectWeaveEvent(state, dispatched));
+    const failed = weaveEvent("weave.node-failed", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      nodeId,
+      reason: "Verifier exit 1",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(running, failed));
+    expect(result.nodeStatuses.get(nodeId)).toBe("failed");
   });
 });
