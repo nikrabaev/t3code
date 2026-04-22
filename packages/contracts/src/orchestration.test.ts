@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect";
 import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
+  OrchestrationAggregateKind,
   OrchestrationCommand,
   OrchestrationEvent,
   OrchestrationGetTurnDiffInput,
@@ -539,6 +540,15 @@ it.effect("preserves proposed plan implementation metadata when present", () =>
 it.effect("accepts 'weave' as a provider interaction mode", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeProviderInteractionMode("weave");
+    assert.strictEqual(parsed, "weave");
+  }),
+);
+
+const decodeOrchestrationAggregateKind = Schema.decodeUnknownEffect(OrchestrationAggregateKind);
+
+it.effect("accepts 'weave' as an orchestration aggregate kind", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationAggregateKind("weave");
     assert.strictEqual(parsed, "weave");
   }),
 );
