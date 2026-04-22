@@ -130,6 +130,54 @@ export function projectWeaveEvent(
         }),
       );
     }
+    case "weave.blueprint-compiled": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.blueprint-compiled requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeStatuses = new Map<WeaveNodeId, WeaveNodeStatus>();
+      for (const node of payload.blueprint.nodes) {
+        nextNodeStatuses.set(node.id, "pending");
+      }
+      const nextOpenDecisions = new Set<WeaveDecisionId>();
+      for (const decision of payload.blueprint.decisions) {
+        if (decision.resolution === undefined) {
+          nextOpenDecisions.add(decision.id);
+        }
+      }
+      return Effect.succeed({
+        ...state,
+        run: { ...state.run, status: "reviewing" },
+        currentBlueprint: payload.blueprint,
+        nodeStatuses: nextNodeStatuses,
+        openDecisions: nextOpenDecisions,
+      });
+    }
+    case "weave.blueprint-approved": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.blueprint-approved requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      return Effect.succeed({
+        ...state,
+        run: {
+          ...state.run,
+          status: "running",
+          currentBlueprintVersion: payload.version,
+          concurrencyCap: payload.concurrencyCap,
+        },
+      });
+    }
     default: {
       // Placeholder: Tasks 3–5 add the remaining 8 event cases.
       if (state === null) {
