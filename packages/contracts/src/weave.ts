@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import {
+  CommandId,
   IsoDateTime,
   MessageId,
   NonNegativeInt,
@@ -186,3 +187,75 @@ export const WeaveRun = Schema.Struct({
   createdAt: IsoDateTime,
 });
 export type WeaveRun = typeof WeaveRun.Type;
+
+// --- Dispatchable (client-facing) Weave commands ---
+// These are user-initiated and travel through
+// OrchestrationRpcSchemas.dispatchCommand. They must be listed in
+// DispatchableClientOrchestrationCommand (see orchestration.ts extensions).
+
+export const WeaveCreateCommand = Schema.Struct({
+  type: Schema.Literal("weave.create"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  vision: Schema.String,
+  parentThreadId: Schema.optional(ThreadId),
+  parentMessageId: Schema.optional(MessageId),
+  snapshotContent: Schema.optional(Schema.String),
+  createdAt: IsoDateTime,
+});
+export type WeaveCreateCommand = typeof WeaveCreateCommand.Type;
+
+export const WeaveBlueprintApproveCommand = Schema.Struct({
+  type: Schema.Literal("weave.blueprint.approve"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  blueprintVersion: BlueprintVersion,
+  concurrencyCap: ConcurrencyCap,
+  createdAt: IsoDateTime,
+});
+export type WeaveBlueprintApproveCommand = typeof WeaveBlueprintApproveCommand.Type;
+
+export const WeavePhaseApproveCommand = Schema.Struct({
+  type: Schema.Literal("weave.phase.approve"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  phaseId: WeavePhaseId,
+  approval: WeavePhaseApproval,
+  createdAt: IsoDateTime,
+});
+export type WeavePhaseApproveCommand = typeof WeavePhaseApproveCommand.Type;
+
+export const WeaveDecisionResolveCommand = Schema.Struct({
+  type: Schema.Literal("weave.decision.resolve"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  decisionId: WeaveDecisionId,
+  answer: Schema.String,
+  byUser: Schema.Boolean,
+  rationale: Schema.optional(Schema.String),
+  createdAt: IsoDateTime,
+});
+export type WeaveDecisionResolveCommand = typeof WeaveDecisionResolveCommand.Type;
+
+export const WeaveExitReason = Schema.Literals(["complete", "aborted"]);
+export type WeaveExitReason = typeof WeaveExitReason.Type;
+
+export const WeaveExitCommand = Schema.Struct({
+  type: Schema.Literal("weave.exit"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  reason: WeaveExitReason,
+  createdAt: IsoDateTime,
+});
+export type WeaveExitCommand = typeof WeaveExitCommand.Type;
+
+export const WeaveDispatchableCommand = Schema.Union([
+  WeaveCreateCommand,
+  WeaveBlueprintApproveCommand,
+  WeavePhaseApproveCommand,
+  WeaveDecisionResolveCommand,
+  WeaveExitCommand,
+]);
+export type WeaveDispatchableCommand = typeof WeaveDispatchableCommand.Type;

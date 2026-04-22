@@ -4,9 +4,15 @@ import { Effect, Schema } from "effect";
 
 import {
   BlueprintVersion,
+  WeaveBlueprintApproveCommand,
   WeaveContractId,
+  WeaveCreateCommand,
   WeaveDecisionId,
+  WeaveDecisionResolveCommand,
+  WeaveDispatchableCommand,
+  WeaveExitCommand,
   WeaveNodeId,
+  WeavePhaseApproveCommand,
   WeavePhaseId,
   WeaveRunId,
 } from "./weave.ts";
@@ -449,5 +455,131 @@ it.effect("rejects concurrencyCap outside 1..8", () =>
       }),
     );
     assert.strictEqual(nonInt._tag, "Failure");
+  }),
+);
+
+const decodeWeaveCreate = Schema.decodeUnknownEffect(WeaveCreateCommand);
+const decodeWeaveBlueprintApprove = Schema.decodeUnknownEffect(WeaveBlueprintApproveCommand);
+const decodeWeavePhaseApprove = Schema.decodeUnknownEffect(WeavePhaseApproveCommand);
+const decodeWeaveDecisionResolve = Schema.decodeUnknownEffect(WeaveDecisionResolveCommand);
+const decodeWeaveExit = Schema.decodeUnknownEffect(WeaveExitCommand);
+const decodeWeaveDispatchable = Schema.decodeUnknownEffect(WeaveDispatchableCommand);
+
+it.effect("decodes weave.create with required fields", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveCreate({
+      type: "weave.create",
+      commandId: "cmd-1",
+      weaveRunId: "run-1",
+      projectId: "project-1",
+      title: "Add blog",
+      vision: "# Goal",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.create");
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+    assert.strictEqual(parsed.parentThreadId, undefined);
+  }),
+);
+
+it.effect("decodes weave.blueprint.approve with concurrency cap", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveBlueprintApprove({
+      type: "weave.blueprint.approve",
+      commandId: "cmd-2",
+      weaveRunId: "run-1",
+      blueprintVersion: 1,
+      concurrencyCap: 1,
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.blueprintVersion, 1);
+    assert.strictEqual(parsed.concurrencyCap, 1);
+  }),
+);
+
+it.effect("rejects weave.blueprint.approve with concurrencyCap out of range", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWeaveBlueprintApprove({
+        type: "weave.blueprint.approve",
+        commandId: "cmd-bad",
+        weaveRunId: "run-1",
+        blueprintVersion: 1,
+        concurrencyCap: 9,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("decodes weave.phase.approve", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeavePhaseApprove({
+      type: "weave.phase.approve",
+      commandId: "cmd-3",
+      weaveRunId: "run-1",
+      phaseId: "phase-1",
+      approval: "approved",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.approval, "approved");
+  }),
+);
+
+it.effect("decodes weave.decision.resolve with rationale", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDecisionResolve({
+      type: "weave.decision.resolve",
+      commandId: "cmd-4",
+      weaveRunId: "run-1",
+      decisionId: "decision-1",
+      answer: "jotai",
+      byUser: true,
+      rationale: "Already in repo.",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.answer, "jotai");
+    assert.strictEqual(parsed.byUser, true);
+    assert.strictEqual(parsed.rationale, "Already in repo.");
+  }),
+);
+
+it.effect("decodes weave.exit with reason", () =>
+  Effect.gen(function* () {
+    for (const reason of ["complete", "aborted"] as const) {
+      const parsed = yield* decodeWeaveExit({
+        type: "weave.exit",
+        commandId: "cmd-5",
+        weaveRunId: "run-1",
+        reason,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      });
+      assert.strictEqual(parsed.reason, reason);
+    }
+  }),
+);
+
+it.effect("WeaveDispatchableCommand union decodes every variant", () =>
+  Effect.gen(function* () {
+    const create = yield* decodeWeaveDispatchable({
+      type: "weave.create",
+      commandId: "cmd-u1",
+      weaveRunId: "run-1",
+      projectId: "project-1",
+      title: "X",
+      vision: "",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(create.type, "weave.create");
+
+    const exit = yield* decodeWeaveDispatchable({
+      type: "weave.exit",
+      commandId: "cmd-u2",
+      weaveRunId: "run-1",
+      reason: "aborted",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(exit.type, "weave.exit");
   }),
 );
