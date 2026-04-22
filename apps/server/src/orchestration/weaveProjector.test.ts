@@ -388,3 +388,138 @@ describe("projectWeaveEvent — node lifecycle", () => {
     expect(result.nodeStatuses.get(nodeId)).toBe("failed");
   });
 });
+
+describe("projectWeaveEvent — decision, phase, exit", () => {
+  // Helper to reach a running projection (reuses runningProjectionWithNode from the prior describe block).
+  // Since runningProjectionWithNode is declared inside that describe, we duplicate the minimal pieces here.
+
+  async function runningProjection() {
+    const created = weaveEvent("weave.created", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      projectId: ProjectId.make("project-1"),
+      title: "X",
+      vision: "",
+      occurredAt: now,
+    });
+    const p0 = await Effect.runPromise(projectWeaveEvent(null, created));
+    const compiled = weaveEvent("weave.blueprint-compiled", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(1),
+      compiledBy: "planner",
+      occurredAt: now,
+      blueprint: {
+        version: BlueprintVersion.make(1),
+        nodes: [],
+        phases: [
+          {
+            id: WeavePhaseId.make("phase-1"),
+            ordinal: 0,
+            title: "Only Phase",
+            description: "",
+            approval: "pending",
+          },
+        ],
+        contracts: [],
+        decisions: [
+          {
+            id: WeaveDecisionId.make("decision-1"),
+            question: "Q",
+            options: ["a", "b"],
+            blastRadiusNodeIds: [],
+          },
+        ],
+        compiledAt: now,
+        compiledBy: "planner",
+      },
+    });
+    const p1 = await Effect.runPromise(projectWeaveEvent(p0, compiled));
+    const approved = weaveEvent("weave.blueprint-approved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(1),
+      concurrencyCap: 1,
+      occurredAt: now,
+    });
+    return await Effect.runPromise(projectWeaveEvent(p1, approved));
+  }
+
+  it("weave.decision-resolved by user removes decision from openDecisions and leaves autoDecisionLog unchanged", async () => {
+    const state = await runningProjection();
+    const decisionId = WeaveDecisionId.make("decision-1");
+    const resolved = weaveEvent("weave.decision-resolved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      decisionId,
+      answer: "a",
+      byUser: true,
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, resolved));
+    expect(result.openDecisions.has(decisionId)).toBe(false);
+    expect(result.autoDecisionLog.length).toBe(0);
+  });
+
+  it("weave.decision-resolved by AI (byUser=false) appends to autoDecisionLog", async () => {
+    const state = await runningProjection();
+    const decisionId = WeaveDecisionId.make("decision-1");
+    const resolved = weaveEvent("weave.decision-resolved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      decisionId,
+      answer: "b",
+      byUser: false,
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, resolved));
+    expect(result.openDecisions.has(decisionId)).toBe(false);
+    expect(result.autoDecisionLog.length).toBe(1);
+    expect(result.autoDecisionLog[0].decisionId).toBe(decisionId);
+    expect(result.autoDecisionLog[0].answer).toBe("b");
+    expect(result.autoDecisionLog[0].at).toBe(now);
+  });
+
+  it("weave.phase-approved with approval=approved sets phaseApprovals entry", async () => {
+    const state = await runningProjection();
+    const phaseId = WeavePhaseId.make("phase-1");
+    const approved = weaveEvent("weave.phase-approved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      phaseId,
+      approval: "approved",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, approved));
+    expect(result.phaseApprovals.get(phaseId)).toBe("approved");
+  });
+
+  it("weave.phase-approved with approval=rejected sets phaseApprovals entry", async () => {
+    const state = await runningProjection();
+    const phaseId = WeavePhaseId.make("phase-1");
+    const rejected = weaveEvent("weave.phase-approved", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      phaseId,
+      approval: "rejected",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, rejected));
+    expect(result.phaseApprovals.get(phaseId)).toBe("rejected");
+  });
+
+  it("weave.exited with reason=complete sets run.status to complete", async () => {
+    const state = await runningProjection();
+    const exited = weaveEvent("weave.exited", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      reason: "complete",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, exited));
+    expect(result.run.status).toBe("complete");
+  });
+
+  it("weave.exited with reason=aborted sets run.status to aborted", async () => {
+    const state = await runningProjection();
+    const exited = weaveEvent("weave.exited", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      reason: "aborted",
+      occurredAt: now,
+    });
+    const result = await Effect.runPromise(projectWeaveEvent(state, exited));
+    expect(result.run.status).toBe("aborted");
+  });
+});

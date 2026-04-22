@@ -229,16 +229,62 @@ export function projectWeaveEvent(
       nextNodeStatuses.set(payload.nodeId, "failed");
       return Effect.succeed({ ...state, nodeStatuses: nextNodeStatuses });
     }
-    default: {
-      // Placeholder: Tasks 3–5 add the remaining 8 event cases.
+    case "weave.decision-resolved": {
       if (state === null) {
         return Effect.fail(
           new OrchestrationProjectorDecodeError({
             eventType: event.type,
-            issue: `weave event ${event.type} requires a pre-existing projection (null received)`,
+            issue: `weave.decision-resolved requires existing projection (null received).`,
           }),
         );
       }
+      const { payload } = event;
+      const nextOpenDecisions = new Set(state.openDecisions);
+      nextOpenDecisions.delete(payload.decisionId);
+      const nextAutoDecisionLog = payload.byUser
+        ? state.autoDecisionLog
+        : [
+            ...state.autoDecisionLog,
+            { decisionId: payload.decisionId, answer: payload.answer, at: payload.occurredAt },
+          ];
+      return Effect.succeed({
+        ...state,
+        openDecisions: nextOpenDecisions,
+        autoDecisionLog: nextAutoDecisionLog,
+      });
+    }
+    case "weave.phase-approved": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.phase-approved requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextPhaseApprovals = new Map(state.phaseApprovals);
+      nextPhaseApprovals.set(payload.phaseId, payload.approval);
+      return Effect.succeed({ ...state, phaseApprovals: nextPhaseApprovals });
+    }
+    case "weave.exited": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.exited requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      return Effect.succeed({
+        ...state,
+        run: { ...state.run, status: payload.reason },
+      });
+    }
+    default: {
+      const _exhaustive: never = event;
+      void _exhaustive;
       return Effect.succeed(state);
     }
   }
