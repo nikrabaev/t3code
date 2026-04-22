@@ -634,3 +634,44 @@ it.effect("decodes a weave.exited event via OrchestrationEvent", () =>
     }
   }),
 );
+
+it.effect("decodes weave.create via OrchestrationCommand", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationCommand({
+      type: "weave.create",
+      commandId: "cmd-1",
+      weaveRunId: "run-1",
+      projectId: "project-1",
+      title: "Add blog",
+      vision: "",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.create");
+  }),
+);
+
+it.effect("decodes weave.blueprint.compile (internal) via OrchestrationCommand", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationCommand({
+      type: "weave.blueprint.compile",
+      commandId: "cmd-2",
+      weaveRunId: "run-1",
+      reason: "initial",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.blueprint.compile");
+  }),
+);
+
+it.effect("decodes weave.exit via OrchestrationCommand", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationCommand({
+      type: "weave.exit",
+      commandId: "cmd-3",
+      weaveRunId: "run-1",
+      reason: "complete",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.exit");
+  }),
+);

@@ -22,13 +22,22 @@ import {
 } from "./baseSchemas.ts";
 import {
   WeaveBlueprintApprovedPayload,
+  WeaveBlueprintApproveCommand,
+  WeaveBlueprintCompileCommand,
   WeaveBlueprintCompiledPayload,
+  WeaveCreateCommand,
   WeaveCreatedPayload,
+  WeaveDecisionResolveCommand,
   WeaveDecisionResolvedPayload,
+  WeaveExitCommand,
   WeaveExitedPayload,
+  WeaveNodeDispatchCommand,
   WeaveNodeDispatchedPayload,
+  WeaveNodeFailedCommand,
   WeaveNodeFailedPayload,
+  WeaveNodeVerifiedCommand,
   WeaveNodeVerifiedPayload,
+  WeavePhaseApproveCommand,
   WeavePhaseApprovedPayload,
   WeaveRunId,
 } from "./weave.ts";
@@ -642,6 +651,12 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  // --- Weave dispatchable commands ---
+  WeaveCreateCommand,
+  WeaveBlueprintApproveCommand,
+  WeavePhaseApproveCommand,
+  WeaveDecisionResolveCommand,
+  WeaveExitCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -663,6 +678,12 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  // --- Weave dispatchable commands ---
+  WeaveCreateCommand,
+  WeaveBlueprintApproveCommand,
+  WeavePhaseApproveCommand,
+  WeaveDecisionResolveCommand,
+  WeaveExitCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -739,6 +760,11 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
+  // --- Weave internal commands ---
+  WeaveBlueprintCompileCommand,
+  WeaveNodeDispatchCommand,
+  WeaveNodeVerifiedCommand,
+  WeaveNodeFailedCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
