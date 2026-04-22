@@ -741,6 +741,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    // Slice 1 stub: weave dispatch not wired yet (ships in Slice 3).
+    case "weave.create":
+    case "weave.blueprint.approve":
+    case "weave.phase.approve":
+    case "weave.decision.resolve":
+    case "weave.exit":
+    case "weave.blueprint.compile":
+    case "weave.node.dispatch":
+    case "weave.node.verified":
+    case "weave.node.failed": {
+      return yield* new OrchestrationCommandInvariantError({
+        commandType: command.type,
+        detail: `Weave command type '${command.type}' is not handled in Slice 1; real dispatch ships in Slice 3.`,
+      });
+    }
+
     default: {
       command satisfies never;
       const fallback = command as never as { type: string };

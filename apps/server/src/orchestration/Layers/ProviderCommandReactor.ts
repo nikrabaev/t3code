@@ -644,7 +644,10 @@ const make = Effect.gen(function* () {
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
-      interactionMode: event.payload.interactionMode,
+      // Slice 1 stub: weave threads run child turns in "default" mode; the outer
+      // weave aggregate does not produce provider turns directly (ships in Slice 3).
+      interactionMode:
+        event.payload.interactionMode === "weave" ? "default" : event.payload.interactionMode,
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),

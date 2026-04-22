@@ -303,8 +303,11 @@ function buildCodexCollaborationMode(input: {
     return undefined;
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL_BY_PROVIDER.codex;
+  // Slice 1 stub: Codex API does not know about "weave" mode; weave runs its
+  // child threads in "default" interaction mode (ships in Slice 3).
+  const codexMode = input.interactionMode === "weave" ? "default" : input.interactionMode;
   return {
-    mode: input.interactionMode,
+    mode: codexMode,
     settings: {
       model,
       reasoning_effort: input.effort ?? "medium",

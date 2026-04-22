@@ -3,6 +3,7 @@ import type {
   OrchestrationReadModel,
   ProjectId,
   ThreadId,
+  WeaveRunId,
 } from "@t3tools/contracts";
 import { OrchestrationCommand } from "@t3tools/contracts";
 import {
@@ -51,8 +52,8 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "thread";
-  readonly aggregateId: ProjectId | ThreadId;
+  readonly aggregateKind: "project" | "thread" | "weave";
+  readonly aggregateId: ProjectId | ThreadId | WeaveRunId;
 } {
   switch (command.type) {
     case "project.create":
@@ -61,6 +62,20 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "project",
         aggregateId: command.projectId,
+      };
+    // Slice 1 stub: weave commands not dispatched yet (ships in Slice 3).
+    case "weave.create":
+    case "weave.blueprint.approve":
+    case "weave.phase.approve":
+    case "weave.decision.resolve":
+    case "weave.exit":
+    case "weave.blueprint.compile":
+    case "weave.node.dispatch":
+    case "weave.node.verified":
+    case "weave.node.failed":
+      return {
+        aggregateKind: "weave",
+        aggregateId: command.weaveRunId,
       };
     default:
       return {
@@ -159,15 +174,23 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                 });
               }
 
-              yield* commandReceiptRepository.upsert({
-                commandId: envelope.command.commandId,
-                aggregateKind: lastSavedEvent.aggregateKind,
-                aggregateId: lastSavedEvent.aggregateId,
-                acceptedAt: lastSavedEvent.occurredAt,
-                resultSequence: lastSavedEvent.sequence,
-                status: "accepted",
-                error: null,
-              });
+              // Slice 1 stub: weave command receipts not stored yet (ships in Slice 3).
+              // In practice weave commands never reach here in Slice 1 because the
+              // decider returns OrchestrationCommandInvariantError for all weave types.
+              if (lastSavedEvent.aggregateKind !== "weave") {
+                yield* commandReceiptRepository.upsert({
+                  commandId: envelope.command.commandId,
+                  aggregateKind: lastSavedEvent.aggregateKind,
+                  // EventBaseFields.aggregateId is ProjectId|ThreadId|WeaveRunId on every union
+                  // member — TypeScript cannot narrow it from aggregateKind alone. The guard
+                  // above ensures this is safe; Slice 3 will correlate the types properly.
+                  aggregateId: lastSavedEvent.aggregateId as ProjectId | ThreadId,
+                  acceptedAt: lastSavedEvent.occurredAt,
+                  resultSequence: lastSavedEvent.sequence,
+                  status: "accepted",
+                  error: null,
+                });
+              }
 
               return {
                 committedEvents,
@@ -248,12 +271,18 @@ const makeOrchestrationEngine = Effect.gen(function* () {
               ),
             );
 
-            if (Schema.is(OrchestrationCommandInvariantError)(error)) {
+            // Slice 1 stub: weave command rejection receipts not stored yet (ships in Slice 3).
+            if (
+              Schema.is(OrchestrationCommandInvariantError)(error) &&
+              aggregateRef.aggregateKind !== "weave"
+            ) {
               yield* commandReceiptRepository
                 .upsert({
                   commandId: envelope.command.commandId,
                   aggregateKind: aggregateRef.aggregateKind,
-                  aggregateId: aggregateRef.aggregateId,
+                  // aggregateRef.aggregateId is ProjectId|ThreadId|WeaveRunId; the guard above
+                  // excludes "weave" so the cast is safe. Slice 3 will correlate types properly.
+                  aggregateId: aggregateRef.aggregateId as ProjectId | ThreadId,
                   acceptedAt: new Date().toISOString(),
                   resultSequence: readModel.snapshotSequence,
                   status: "rejected",

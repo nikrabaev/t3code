@@ -178,11 +178,22 @@ const makeEventStore = Effect.gen(function* () {
       `,
   });
 
-  const append: OrchestrationEventStoreShape["append"] = (event) =>
-    appendEventRow({
+  const append: OrchestrationEventStoreShape["append"] = (event) => {
+    // Slice 1 stub: weave events use WeaveRunId as their streamId, which the
+    // current DB schema (streamId: ProjectId | ThreadId) does not yet support.
+    // Real weave event persistence ships in Slice 3.
+    if (event.aggregateKind === "weave") {
+      return Effect.die(
+        `OrchestrationEventStore.append: weave event persistence not wired yet (Slice 3). type=${event.type}`,
+      );
+    }
+    return appendEventRow({
       eventId: event.eventId,
       aggregateKind: event.aggregateKind,
-      streamId: event.aggregateId,
+      // EventBaseFields.aggregateId is ProjectId|ThreadId|WeaveRunId on every union member;
+      // TypeScript cannot narrow it from aggregateKind alone. The guard above excludes weave
+      // events so the cast is safe. Slice 3 will correlate the types properly.
+      streamId: event.aggregateId as ProjectId | ThreadId,
       type: event.type,
       causationEventId: event.causationEventId,
       correlationId: event.correlationId,
@@ -204,6 +215,7 @@ const makeEventStore = Effect.gen(function* () {
         ),
       ),
     );
+  };
 
   const readFromSequence: OrchestrationEventStoreShape["readFromSequence"] = (
     sequenceExclusive,
