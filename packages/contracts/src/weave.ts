@@ -1,5 +1,12 @@
 import { Schema } from "effect";
-import { IsoDateTime, NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  MessageId,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 
 // Branded IDs — mirror the `makeEntityId` pattern in baseSchemas.ts
 // (trimmed non-empty strings with a nominal brand).
@@ -155,3 +162,27 @@ export const Blueprint = Schema.Struct({
   compiledBy: BlueprintSource,
 });
 export type Blueprint = typeof Blueprint.Type;
+
+// WeaveRun — the parent aggregate. Has 0..1 currentBlueprint (Blueprint itself
+// lives in a separate projection row in Slice 3; the version number is enough here).
+// concurrencyCap is bounded 1..8 per spec §1.5.
+const ConcurrencyCap = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(1),
+  Schema.isLessThanOrEqualTo(8),
+);
+
+export const WeaveRun = Schema.Struct({
+  id: WeaveRunId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  vision: Schema.String,
+  parentThreadId: Schema.optional(ThreadId),
+  parentMessageId: Schema.optional(MessageId),
+  snapshotContent: Schema.optional(Schema.String),
+  currentBlueprintVersion: Schema.optional(BlueprintVersion),
+  status: WeaveRunStatus,
+  currentPhaseId: Schema.optional(WeavePhaseId),
+  concurrencyCap: ConcurrencyCap,
+  createdAt: IsoDateTime,
+});
+export type WeaveRun = typeof WeaveRun.Type;

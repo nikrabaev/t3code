@@ -359,3 +359,95 @@ it.effect("rejects an unknown Blueprint.compiledBy", () =>
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+import { WeaveRun } from "./weave.ts";
+
+const decodeWeaveRun = Schema.decodeUnknownEffect(WeaveRun);
+
+it.effect("round-trips a minimal draft WeaveRun", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRun({
+      id: "run-1",
+      projectId: "project-1",
+      title: "Add a blog",
+      vision: "# Goal\nShip a blog.",
+      status: "draft",
+      concurrencyCap: 1,
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.id, "run-1");
+    assert.strictEqual(parsed.status, "draft");
+    assert.strictEqual(parsed.concurrencyCap, 1);
+    assert.strictEqual(parsed.currentBlueprintVersion, undefined);
+    assert.strictEqual(parsed.currentPhaseId, undefined);
+    assert.strictEqual(parsed.parentThreadId, undefined);
+    assert.strictEqual(parsed.parentMessageId, undefined);
+    assert.strictEqual(parsed.snapshotContent, undefined);
+  }),
+);
+
+it.effect("round-trips a running WeaveRun with parent-thread metadata", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRun({
+      id: "run-2",
+      projectId: "project-1",
+      title: "Add a blog",
+      vision: "# Goal\nShip a blog.",
+      parentThreadId: "thread-parent",
+      parentMessageId: "msg-123",
+      snapshotContent: "# Parent chat\n…",
+      currentBlueprintVersion: 1,
+      status: "running",
+      currentPhaseId: "phase-1",
+      concurrencyCap: 1,
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.status, "running");
+    assert.strictEqual(parsed.currentBlueprintVersion, 1);
+    assert.strictEqual(parsed.currentPhaseId, "phase-1");
+    assert.strictEqual(parsed.parentThreadId, "thread-parent");
+  }),
+);
+
+it.effect("rejects concurrencyCap outside 1..8", () =>
+  Effect.gen(function* () {
+    const tooSmall = yield* Effect.exit(
+      decodeWeaveRun({
+        id: "run-3",
+        projectId: "project-1",
+        title: "X",
+        vision: "",
+        status: "draft",
+        concurrencyCap: 0,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(tooSmall._tag, "Failure");
+
+    const tooBig = yield* Effect.exit(
+      decodeWeaveRun({
+        id: "run-4",
+        projectId: "project-1",
+        title: "X",
+        vision: "",
+        status: "draft",
+        concurrencyCap: 9,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(tooBig._tag, "Failure");
+
+    const nonInt = yield* Effect.exit(
+      decodeWeaveRun({
+        id: "run-5",
+        projectId: "project-1",
+        title: "X",
+        vision: "",
+        status: "draft",
+        concurrencyCap: 1.5,
+        createdAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(nonInt._tag, "Failure");
+  }),
+);
