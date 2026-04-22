@@ -108,3 +108,103 @@ it.effect("accepts every DecisionPreAuthScope literal", () =>
     }
   }),
 );
+
+import {
+  Scope,
+  WeaveContract,
+  WeaveDecision,
+  WeavePhase,
+} from "./weave.ts";
+
+const decodeScope = Schema.decodeUnknownEffect(Scope);
+const decodeWeaveContract = Schema.decodeUnknownEffect(WeaveContract);
+const decodeWeavePhase = Schema.decodeUnknownEffect(WeavePhase);
+const decodeWeaveDecision = Schema.decodeUnknownEffect(WeaveDecision);
+
+it.effect("round-trips a Scope with read/write globs", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeScope({
+      readSet: ["src/**/*.ts"],
+      writeSet: ["src/feature/**/*.ts"],
+    });
+    assert.deepStrictEqual(parsed.readSet, ["src/**/*.ts"]);
+    assert.deepStrictEqual(parsed.writeSet, ["src/feature/**/*.ts"]);
+  }),
+);
+
+it.effect("round-trips a WeaveContract without conformanceTestPath", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveContract({
+      id: "contract-1",
+      ownerNodeId: "node-1",
+      surface: "type Foo = { bar: string }",
+      semantics: "bar is never empty",
+    });
+    assert.strictEqual(parsed.id, "contract-1");
+    assert.strictEqual(parsed.conformanceTestPath, undefined);
+  }),
+);
+
+it.effect("round-trips a WeaveContract with conformanceTestPath", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveContract({
+      id: "contract-2",
+      ownerNodeId: "node-2",
+      surface: "{}",
+      semantics: "",
+      conformanceTestPath: ".weave/contracts/node-2/conformance.test.ts",
+    });
+    assert.strictEqual(
+      parsed.conformanceTestPath,
+      ".weave/contracts/node-2/conformance.test.ts",
+    );
+  }),
+);
+
+it.effect("round-trips a WeavePhase with default approval pending", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeavePhase({
+      id: "phase-1",
+      ordinal: 0,
+      title: "Scaffold",
+      description: "Lay down tooling and package layout.",
+      approval: "pending",
+    });
+    assert.strictEqual(parsed.ordinal, 0);
+    assert.strictEqual(parsed.approval, "pending");
+  }),
+);
+
+it.effect("round-trips a WeaveDecision without a resolution", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDecision({
+      id: "decision-1",
+      question: "Pick a state library.",
+      options: ["zustand", "jotai", "valtio"],
+      blastRadiusNodeIds: ["node-a", "node-b"],
+    });
+    assert.strictEqual(parsed.resolution, undefined);
+    assert.deepStrictEqual(parsed.options, ["zustand", "jotai", "valtio"]);
+  }),
+);
+
+it.effect("round-trips a WeaveDecision with a user-supplied resolution", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDecision({
+      id: "decision-2",
+      question: "Pick a state library.",
+      options: ["zustand", "jotai"],
+      blastRadiusNodeIds: [],
+      preAuthScope: "library",
+      resolution: {
+        answer: "jotai",
+        byUser: true,
+        rationale: "Already in the codebase.",
+        resolvedAt: "2026-04-21T12:00:00.000Z",
+      },
+    });
+    assert.strictEqual(parsed.resolution?.answer, "jotai");
+    assert.strictEqual(parsed.resolution?.byUser, true);
+    assert.strictEqual(parsed.preAuthScope, "library");
+  }),
+);

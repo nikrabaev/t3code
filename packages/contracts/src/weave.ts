@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 // Branded IDs — mirror the `makeEntityId` pattern in baseSchemas.ts
 // (trimmed non-empty strings with a nominal brand).
@@ -67,3 +67,53 @@ export const DecisionPreAuthScope = Schema.Literals([
   "cost",       // billing-adjacent
 ]);
 export type DecisionPreAuthScope = typeof DecisionPreAuthScope.Type;
+
+// Scope — declared read-set and write-set for a Node.
+// Glob patterns, v0.1 enforced only by worktree boundary.
+export const Scope = Schema.Struct({
+  readSet: Schema.Array(Schema.String),
+  writeSet: Schema.Array(Schema.String),
+});
+export type Scope = typeof Scope.Type;
+
+// WeaveContract — ancestor-authored interface for descendants to consume.
+// `surface` and `semantics` are Markdown-with-types / Markdown respectively;
+// allowed to be empty (a Contract may be all-semantics or all-surface).
+export const WeaveContract = Schema.Struct({
+  id: WeaveContractId,
+  ownerNodeId: WeaveNodeId,
+  surface: Schema.String,
+  semantics: Schema.String,
+  conformanceTestPath: Schema.optional(Schema.String),
+});
+export type WeaveContract = typeof WeaveContract.Type;
+
+// WeavePhase — a demo-able slice of the Blueprint. Phases are linear.
+export const WeavePhase = Schema.Struct({
+  id: WeavePhaseId,
+  ordinal: NonNegativeInt,
+  title: TrimmedNonEmptyString,
+  description: Schema.String,
+  smokeTestPath: Schema.optional(Schema.String),
+  approval: WeavePhaseApproval,
+});
+export type WeavePhase = typeof WeavePhase.Type;
+
+// WeaveDecision — a deferred choice with a blast radius.
+export const WeaveDecisionResolution = Schema.Struct({
+  answer: Schema.String,
+  byUser: Schema.Boolean,
+  rationale: Schema.optional(Schema.String),
+  resolvedAt: IsoDateTime,
+});
+export type WeaveDecisionResolution = typeof WeaveDecisionResolution.Type;
+
+export const WeaveDecision = Schema.Struct({
+  id: WeaveDecisionId,
+  question: TrimmedNonEmptyString,
+  options: Schema.Array(Schema.String),
+  blastRadiusNodeIds: Schema.Array(WeaveNodeId),
+  preAuthScope: Schema.optional(DecisionPreAuthScope),
+  resolution: Schema.optional(WeaveDecisionResolution),
+});
+export type WeaveDecision = typeof WeaveDecision.Type;
