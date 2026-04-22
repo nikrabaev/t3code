@@ -679,3 +679,152 @@ it.effect("WeaveInternalCommand union decodes every variant", () =>
     assert.strictEqual(failed.type, "weave.node.failed");
   }),
 );
+
+import {
+  WeaveBlueprintApprovedPayload,
+  WeaveBlueprintCompiledPayload,
+  WeaveCreatedPayload,
+  WeaveDecisionResolvedPayload,
+  WeaveExitedPayload,
+  WeaveNodeDispatchedPayload,
+  WeaveNodeFailedPayload,
+  WeaveNodeVerifiedPayload,
+  WeavePhaseApprovedPayload,
+} from "./weave.ts";
+
+const decodeWeaveCreatedPayload = Schema.decodeUnknownEffect(WeaveCreatedPayload);
+const decodeWeaveBlueprintCompiledPayload = Schema.decodeUnknownEffect(
+  WeaveBlueprintCompiledPayload,
+);
+const decodeWeaveBlueprintApprovedPayload = Schema.decodeUnknownEffect(
+  WeaveBlueprintApprovedPayload,
+);
+const decodeWeaveNodeDispatchedPayload = Schema.decodeUnknownEffect(WeaveNodeDispatchedPayload);
+const decodeWeaveNodeVerifiedPayload = Schema.decodeUnknownEffect(WeaveNodeVerifiedPayload);
+const decodeWeaveNodeFailedPayload = Schema.decodeUnknownEffect(WeaveNodeFailedPayload);
+const decodeWeaveDecisionResolvedPayload = Schema.decodeUnknownEffect(
+  WeaveDecisionResolvedPayload,
+);
+const decodeWeavePhaseApprovedPayload = Schema.decodeUnknownEffect(WeavePhaseApprovedPayload);
+const decodeWeaveExitedPayload = Schema.decodeUnknownEffect(WeaveExitedPayload);
+
+it.effect("decodes WeaveCreatedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveCreatedPayload({
+      weaveRunId: "run-1",
+      projectId: "project-1",
+      title: "X",
+      vision: "",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+  }),
+);
+
+it.effect("decodes WeaveBlueprintCompiledPayload with embedded Blueprint", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveBlueprintCompiledPayload({
+      weaveRunId: "run-1",
+      version: 1,
+      blueprint: {
+        version: 1,
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: "2026-04-21T00:00:00.000Z",
+        compiledBy: "planner",
+      },
+      compiledBy: "planner",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.version, 1);
+    assert.strictEqual(parsed.compiledBy, "planner");
+  }),
+);
+
+it.effect("decodes WeaveBlueprintApprovedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveBlueprintApprovedPayload({
+      weaveRunId: "run-1",
+      version: 1,
+      concurrencyCap: 1,
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.concurrencyCap, 1);
+  }),
+);
+
+it.effect("decodes WeaveNodeDispatchedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeDispatchedPayload({
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      childThreadId: "thread-1",
+      worktreePath: "/tmp/wt",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.nodeId, "node-1");
+  }),
+);
+
+it.effect("decodes WeaveNodeVerifiedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeVerifiedPayload({
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      verifierOutcome: "tests-passed",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.verifierOutcome, "tests-passed");
+  }),
+);
+
+it.effect("decodes WeaveNodeFailedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeFailedPayload({
+      weaveRunId: "run-1",
+      nodeId: "node-1",
+      reason: "x",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.reason, "x");
+  }),
+);
+
+it.effect("decodes WeaveDecisionResolvedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDecisionResolvedPayload({
+      weaveRunId: "run-1",
+      decisionId: "decision-1",
+      answer: "a",
+      byUser: false,
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.byUser, false);
+    assert.strictEqual(parsed.rationale, undefined);
+  }),
+);
+
+it.effect("decodes WeavePhaseApprovedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeavePhaseApprovedPayload({
+      weaveRunId: "run-1",
+      phaseId: "phase-1",
+      approval: "approved",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.approval, "approved");
+  }),
+);
+
+it.effect("decodes WeaveExitedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveExitedPayload({
+      weaveRunId: "run-1",
+      reason: "complete",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.reason, "complete");
+  }),
+);

@@ -318,3 +318,90 @@ export type WeaveInternalCommand = typeof WeaveInternalCommand.Type;
 // Convenience: a union of every Weave command. Slice 2's decider takes this as input.
 export const WeaveCommand = Schema.Union([WeaveDispatchableCommand, WeaveInternalCommand]);
 export type WeaveCommand = typeof WeaveCommand.Type;
+
+// --- Weave event payloads ---
+// These are payload-only structs; the surrounding event envelope
+// (sequence, eventId, aggregateKind="weave", aggregateId=WeaveRunId, ...)
+// is added inside the OrchestrationEvent union in orchestration.ts.
+//
+// Every payload carries `weaveRunId` + `occurredAt` for self-identification
+// even without the envelope — matches how ThreadCreatedPayload carries threadId.
+
+export const WeaveCreatedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  vision: Schema.String,
+  parentThreadId: Schema.optional(ThreadId),
+  parentMessageId: Schema.optional(MessageId),
+  snapshotContent: Schema.optional(Schema.String),
+  occurredAt: IsoDateTime,
+});
+export type WeaveCreatedPayload = typeof WeaveCreatedPayload.Type;
+
+export const WeaveBlueprintCompiledPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  version: BlueprintVersion,
+  blueprint: Blueprint,
+  compiledBy: BlueprintSource,
+  occurredAt: IsoDateTime,
+});
+export type WeaveBlueprintCompiledPayload = typeof WeaveBlueprintCompiledPayload.Type;
+
+export const WeaveBlueprintApprovedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  version: BlueprintVersion,
+  concurrencyCap: ConcurrencyCap,
+  occurredAt: IsoDateTime,
+});
+export type WeaveBlueprintApprovedPayload = typeof WeaveBlueprintApprovedPayload.Type;
+
+export const WeaveNodeDispatchedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  childThreadId: ThreadId,
+  worktreePath: Schema.String,
+  occurredAt: IsoDateTime,
+});
+export type WeaveNodeDispatchedPayload = typeof WeaveNodeDispatchedPayload.Type;
+
+export const WeaveNodeVerifiedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  verifierOutcome: Schema.String,
+  occurredAt: IsoDateTime,
+});
+export type WeaveNodeVerifiedPayload = typeof WeaveNodeVerifiedPayload.Type;
+
+export const WeaveNodeFailedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  reason: Schema.String,
+  occurredAt: IsoDateTime,
+});
+export type WeaveNodeFailedPayload = typeof WeaveNodeFailedPayload.Type;
+
+export const WeaveDecisionResolvedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  decisionId: WeaveDecisionId,
+  answer: Schema.String,
+  byUser: Schema.Boolean,
+  rationale: Schema.optional(Schema.String),
+  occurredAt: IsoDateTime,
+});
+export type WeaveDecisionResolvedPayload = typeof WeaveDecisionResolvedPayload.Type;
+
+export const WeavePhaseApprovedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  phaseId: WeavePhaseId,
+  approval: WeavePhaseApproval,
+  occurredAt: IsoDateTime,
+});
+export type WeavePhaseApprovedPayload = typeof WeavePhaseApprovedPayload.Type;
+
+export const WeaveExitedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  reason: WeaveExitReason,
+  occurredAt: IsoDateTime,
+});
+export type WeaveExitedPayload = typeof WeaveExitedPayload.Type;
