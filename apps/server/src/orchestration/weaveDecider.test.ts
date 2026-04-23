@@ -180,16 +180,25 @@ describe("decideWeaveCommand — weave.blueprint.compile", () => {
 });
 
 describe("decideWeaveCommand — weave.blueprint.approve", () => {
-  it("emits weave.blueprint-approved when version matches and run is reviewing", async () => {
+  const reviewingProjectionWithBlueprint = (version: number): WeaveRunProjection => {
     const base = emptyProjection();
-    const p: WeaveRunProjection = {
+    return {
       ...base,
-      run: {
-        ...base.run,
-        status: "reviewing",
-        currentBlueprintVersion: BlueprintVersion.make(1),
+      run: { ...base.run, status: "reviewing" },
+      currentBlueprint: {
+        version: BlueprintVersion.make(version),
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: now,
+        compiledBy: "planner" as const,
       },
     };
+  };
+
+  it("emits weave.blueprint-approved when version matches and run is reviewing", async () => {
+    const p = reviewingProjectionWithBlueprint(1);
     const events = await Effect.runPromise(
       decideWeaveCommand({
         projection: p,
@@ -208,15 +217,7 @@ describe("decideWeaveCommand — weave.blueprint.approve", () => {
   });
 
   it("rejects when version mismatches", async () => {
-    const base = emptyProjection();
-    const p: WeaveRunProjection = {
-      ...base,
-      run: {
-        ...base.run,
-        status: "reviewing",
-        currentBlueprintVersion: BlueprintVersion.make(1),
-      },
-    };
+    const p = reviewingProjectionWithBlueprint(1);
     await expect(
       Effect.runPromise(
         decideWeaveCommand({

@@ -112,10 +112,18 @@ describe("weaveCommandInvariants", () => {
     }
   });
 
-  it("requireBlueprintVersion: passes on exact match", async () => {
+  it("requireBlueprintVersion: passes on exact match against the compiled blueprint", async () => {
     const p = {
       ...emptyProjection(),
-      run: { ...emptyProjection().run, currentBlueprintVersion: BlueprintVersion.make(2) },
+      currentBlueprint: {
+        version: BlueprintVersion.make(2),
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: now,
+        compiledBy: "planner" as const,
+      },
     };
     await Effect.runPromise(
       requireBlueprintVersion({
@@ -126,10 +134,18 @@ describe("weaveCommandInvariants", () => {
     );
   });
 
-  it("requireBlueprintVersion: rejects on mismatch", async () => {
+  it("requireBlueprintVersion: rejects on mismatch against the compiled blueprint", async () => {
     const p = {
       ...emptyProjection(),
-      run: { ...emptyProjection().run, currentBlueprintVersion: BlueprintVersion.make(2) },
+      currentBlueprint: {
+        version: BlueprintVersion.make(2),
+        nodes: [],
+        phases: [],
+        contracts: [],
+        decisions: [],
+        compiledAt: now,
+        compiledBy: "planner" as const,
+      },
     };
     await expect(
       Effect.runPromise(
@@ -137,6 +153,18 @@ describe("weaveCommandInvariants", () => {
           projection: p,
           command: sampleCommand,
           version: BlueprintVersion.make(3),
+        }),
+      ),
+    ).rejects.toThrow("blueprint version mismatch");
+  });
+
+  it("requireBlueprintVersion: rejects when no blueprint has been compiled", async () => {
+    await expect(
+      Effect.runPromise(
+        requireBlueprintVersion({
+          projection: emptyProjection(),
+          command: sampleCommand,
+          version: BlueprintVersion.make(1),
         }),
       ),
     ).rejects.toThrow("blueprint version mismatch");

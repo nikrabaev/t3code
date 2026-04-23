@@ -120,15 +120,8 @@ describe("weave decider+projector roundtrip", () => {
     const afterCompile = await Effect.runPromise(projectWeaveEvent(s1.projection, compiledEvent));
     expect(afterCompile.run.status).toBe("reviewing");
 
-    // 2b. Set currentBlueprintVersion (blueprint-compiled event should do this in projector,
-    //     but as of current HEAD it doesn't; manually set it here to match decider expectations).
-    const afterCompileWithVersion: WeaveRunProjection = {
-      ...afterCompile,
-      run: { ...afterCompile.run, currentBlueprintVersion: BlueprintVersion.make(1) },
-    };
-
     // 3. approve blueprint
-    const s3 = await step(afterCompileWithVersion, {
+    const s3 = await step(afterCompile, {
       type: "weave.blueprint.approve",
       commandId: CommandId.make("cmd-approve"),
       weaveRunId: runId,

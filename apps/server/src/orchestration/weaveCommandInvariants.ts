@@ -73,10 +73,13 @@ export function requireBlueprintVersion(input: {
   readonly command: WeaveCommand;
   readonly version: BlueprintVersion;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
-  if (input.projection.run.currentBlueprintVersion === input.version) return Effect.void;
+  // Compare against the currently-compiled blueprint, not run.currentBlueprintVersion:
+  // the run field is only populated post-approval, so on first approve it would always be
+  // undefined. The "current" version from the command's perspective is the compiled one.
+  if (input.projection.currentBlueprint?.version === input.version) return Effect.void;
   return fail(
     input.command,
-    `blueprint version mismatch: run has '${input.projection.run.currentBlueprintVersion ?? "none"}', command references '${input.version}'.`,
+    `blueprint version mismatch: compiled blueprint is '${input.projection.currentBlueprint?.version ?? "none"}', command references '${input.version}'.`,
   );
 }
 
