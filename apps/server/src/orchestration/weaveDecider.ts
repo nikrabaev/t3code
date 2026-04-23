@@ -3,7 +3,13 @@ import { EventId } from "@t3tools/contracts";
 import { Effect } from "effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
-import { requireRunAbsent } from "./weaveCommandInvariants.ts";
+import {
+  requireBlueprintVersion,
+  requireRun,
+  requireRunNotTerminal,
+  requireRunAbsent,
+  requireStatus,
+} from "./weaveCommandInvariants.ts";
 import type { WeaveRunProjection } from "./weaveProjector.ts";
 
 // PlannedWeaveEvent: a weave-aggregate OrchestrationEvent minus `sequence`
@@ -73,6 +79,59 @@ export function decideWeaveCommand(input: {
               ...(command.snapshotContent !== undefined && {
                 snapshotContent: command.snapshotContent,
               }),
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
+    }
+    case "weave.blueprint.compile": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        const allowed =
+          command.reason === "initial" ? (["draft"] as const) : (["running", "reviewing"] as const);
+        yield* requireStatus({ projection: run, command, allowed });
+        return []; // Planner emits the event; decider only validates.
+      });
+    }
+    case "weave.blueprint.approve": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireStatus({ projection: run, command, allowed: ["reviewing"] });
+        yield* requireBlueprintVersion({
+          projection: run,
+          command,
+          version: command.blueprintVersion,
+        });
+        return [
+          envelope({
+            type: "weave.blueprint-approved",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              version: command.blueprintVersion,
+              concurrencyCap: command.concurrencyCap,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
+    }
+    case "weave.exit": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+        return [
+          envelope({
+            type: "weave.exited",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              reason: command.reason,
               occurredAt: command.createdAt,
             },
           }),
