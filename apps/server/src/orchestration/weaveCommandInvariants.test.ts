@@ -12,6 +12,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
 import {
+  requireAncestorsVerified,
   requireBlueprintVersion,
   requireNode,
   requireNodeStatus,
@@ -216,5 +217,96 @@ describe("weaveCommandInvariants", () => {
         }),
       ),
     ).rejects.toThrow("expected 'pending'");
+  });
+});
+
+describe("requireAncestorsVerified", () => {
+  it("passes when the node has no ancestors", async () => {
+    const node = {
+      id: WeaveNodeId.make("solo"),
+      title: "solo" as unknown as ReturnType<typeof WeaveNodeId.make>,
+      description: "",
+      kind: "raw" as const,
+      phaseId: WeavePhaseId.make("phase-1"),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [],
+      status: "ready" as const,
+    };
+    await Effect.runPromise(
+      requireAncestorsVerified({ projection: emptyProjection(), command: sampleCommand, node }),
+    );
+  });
+
+  it("passes when all ancestors are verified", async () => {
+    const ancestorId = WeaveNodeId.make("parent");
+    const p = {
+      ...emptyProjection(),
+      nodeStatuses: new Map([[ancestorId, "verified" as const]]),
+    };
+    const node = {
+      id: WeaveNodeId.make("child"),
+      title: "child" as unknown as ReturnType<typeof WeaveNodeId.make>,
+      description: "",
+      kind: "raw" as const,
+      phaseId: WeavePhaseId.make("phase-1"),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [ancestorId],
+      status: "ready" as const,
+    };
+    await Effect.runPromise(
+      requireAncestorsVerified({ projection: p, command: sampleCommand, node }),
+    );
+  });
+
+  it("rejects when an ancestor is not verified", async () => {
+    const ancestorId = WeaveNodeId.make("parent");
+    const p = {
+      ...emptyProjection(),
+      nodeStatuses: new Map([[ancestorId, "running" as const]]),
+    };
+    const node = {
+      id: WeaveNodeId.make("child"),
+      title: "child" as unknown as ReturnType<typeof WeaveNodeId.make>,
+      description: "",
+      kind: "raw" as const,
+      phaseId: WeavePhaseId.make("phase-1"),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [ancestorId],
+      status: "ready" as const,
+    };
+    await expect(
+      Effect.runPromise(requireAncestorsVerified({ projection: p, command: sampleCommand, node })),
+    ).rejects.toThrow("ancestor");
+  });
+
+  it("rejects with 'unknown' status when ancestor absent from nodeStatuses", async () => {
+    const ancestorId = WeaveNodeId.make("ghost-parent");
+    const node = {
+      id: WeaveNodeId.make("child"),
+      title: "child" as unknown as ReturnType<typeof WeaveNodeId.make>,
+      description: "",
+      kind: "raw" as const,
+      phaseId: WeavePhaseId.make("phase-1"),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [ancestorId],
+      status: "ready" as const,
+    };
+    await expect(
+      Effect.runPromise(
+        requireAncestorsVerified({ projection: emptyProjection(), command: sampleCommand, node }),
+      ),
+    ).rejects.toThrow("unknown");
   });
 });

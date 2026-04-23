@@ -1,4 +1,13 @@
-import { CommandId, ProjectId, WeaveRunId, BlueprintVersion } from "@t3tools/contracts";
+import {
+  BlueprintVersion,
+  CommandId,
+  ProjectId,
+  ThreadId,
+  WeaveNodeId,
+  WeaveNodeStatus,
+  WeavePhaseId,
+  WeaveRunId,
+} from "@t3tools/contracts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +26,71 @@ const emptyProjection = (runId = "run-1"): WeaveRunProjection =>
     concurrencyCap: 1,
     createdAt: now,
   });
+
+// Build a projection in "running" state with a single-phase blueprint.
+// Each entry in `nodes` may override phaseId, dependsOn, and status.
+function buildRunningProjection(params: {
+  runId?: string;
+  nodes: Array<{
+    id: string;
+    phaseId?: string;
+    dependsOn?: string[];
+    status?: WeaveNodeStatus;
+  }>;
+  phases: Array<{ id: string; ordinal: number }>;
+}): WeaveRunProjection {
+  const runId = params.runId ?? "run-1";
+  const defaultPhaseId = params.phases[0]?.id ?? "phase-1";
+  const nodeStatuses = new Map<WeaveNodeId, WeaveNodeStatus>();
+  for (const n of params.nodes) {
+    nodeStatuses.set(WeaveNodeId.make(n.id), n.status ?? "pending");
+  }
+  const base = createEmptyWeaveProjection({
+    id: WeaveRunId.make(runId),
+    projectId: ProjectId.make("project-1"),
+    title: "X",
+    vision: "",
+    status: "running",
+    concurrencyCap: 1,
+    createdAt: now,
+  });
+  return {
+    ...base,
+    run: { ...base.run, status: "running" },
+    currentBlueprint: {
+      version: BlueprintVersion.make(1),
+      nodes: params.nodes.map((n) => ({
+        id: WeaveNodeId.make(n.id),
+        title: n.id as unknown as ReturnType<typeof WeaveNodeId.make>,
+        description: "",
+        kind: "raw" as const,
+        phaseId: WeavePhaseId.make(n.phaseId ?? defaultPhaseId),
+        scope: { readSet: [], writeSet: [] },
+        inputContractIds: [],
+        outputContractIds: [],
+        verifierDescription: "",
+        dependsOn: (n.dependsOn ?? []).map((id) => WeaveNodeId.make(id)),
+        status: "pending" as const,
+      })),
+      phases: params.phases.map((p) => ({
+        id: WeavePhaseId.make(p.id),
+        ordinal: p.ordinal,
+        title: p.id as unknown as ReturnType<typeof WeavePhaseId.make>,
+        description: "",
+        approval: "pending" as const,
+      })),
+      contracts: [],
+      decisions: [],
+      compiledAt: now,
+      compiledBy: "planner" as const,
+    },
+    nodeStatuses,
+    openDecisions: new Set(),
+    autoDecisionLog: [],
+    phaseApprovals: new Map(),
+    childThreads: new Map(),
+  };
+}
 
 describe("decideWeaveCommand — weave.create", () => {
   it("emits weave.created when the run does not exist", async () => {
@@ -220,5 +294,321 @@ describe("decideWeaveCommand — weave.exit", () => {
         }),
       ),
     ).rejects.toThrow("already terminated");
+  });
+});
+
+describe("decideWeaveCommand — weave.node.dispatch", () => {
+  it("emits weave.node-dispatched when node is ready and has no ancestors", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "ready" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.dispatch",
+          commandId: CommandId.make("cmd-d"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          childThreadId: ThreadId.make("thread-1"),
+          worktreePath: "/tmp/wt",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-dispatched");
+    const first = events[0];
+    if (first !== undefined && first.type === "weave.node-dispatched") {
+      expect(first.payload.nodeId).toBe(WeaveNodeId.make("node-1"));
+      expect(first.payload.worktreePath).toBe("/tmp/wt");
+    }
+  });
+
+  it("emits weave.node-dispatched when all ancestors are verified", async () => {
+    const p = buildRunningProjection({
+      nodes: [
+        { id: "parent", status: "verified" },
+        { id: "child", dependsOn: ["parent"], status: "ready" },
+      ],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.dispatch",
+          commandId: CommandId.make("cmd-d"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("child"),
+          childThreadId: ThreadId.make("thread-2"),
+          worktreePath: "/tmp/wt2",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-dispatched");
+  });
+
+  it("rejects dispatch when run is not running", async () => {
+    const base = emptyProjection(); // status=draft
+    const p: WeaveRunProjection = {
+      ...base,
+      nodeStatuses: new Map([[WeaveNodeId.make("node-1"), "ready" as const]]),
+    };
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.dispatch",
+            commandId: CommandId.make("cmd-d"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            childThreadId: ThreadId.make("thread-1"),
+            worktreePath: "/tmp/wt",
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("rejects dispatch when node is not in ready status", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "pending" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.dispatch",
+            commandId: CommandId.make("cmd-d"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            childThreadId: ThreadId.make("thread-1"),
+            worktreePath: "/tmp/wt",
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("status is 'pending'");
+  });
+
+  it("rejects dispatch when an ancestor is not verified", async () => {
+    const p = buildRunningProjection({
+      nodes: [
+        { id: "parent", status: "running" }, // still running, not verified
+        { id: "child", dependsOn: ["parent"], status: "ready" },
+      ],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.dispatch",
+            commandId: CommandId.make("cmd-d"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("child"),
+            childThreadId: ThreadId.make("thread-1"),
+            worktreePath: "/tmp/wt",
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("ancestor");
+  });
+});
+
+describe("decideWeaveCommand — weave.node.verified", () => {
+  it("emits only weave.node-verified when phase has other pending nodes", async () => {
+    const p = buildRunningProjection({
+      nodes: [
+        { id: "node-1", status: "running" },
+        { id: "node-2", status: "pending" }, // still pending — phase not complete
+      ],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.verified",
+          commandId: CommandId.make("cmd-v"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          verifierOutcome: "All tests pass.",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-verified");
+  });
+
+  it("emits weave.node-verified + weave.phase-approved when this node completes the phase but there is another phase", async () => {
+    const p = buildRunningProjection({
+      nodes: [
+        { id: "node-1", phaseId: "phase-1", status: "running" }, // only node in phase-1
+        { id: "node-2", phaseId: "phase-2", status: "pending" },
+      ],
+      phases: [
+        { id: "phase-1", ordinal: 0 },
+        { id: "phase-2", ordinal: 1 },
+      ],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.verified",
+          commandId: CommandId.make("cmd-v"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          verifierOutcome: "Phase 1 done.",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(2);
+    expect(events[0]?.type).toBe("weave.node-verified");
+    expect(events[1]?.type).toBe("weave.phase-approved");
+    const phaseEvent = events[1];
+    if (phaseEvent !== undefined && phaseEvent.type === "weave.phase-approved") {
+      expect(phaseEvent.payload.phaseId).toBe(WeavePhaseId.make("phase-1"));
+      expect(phaseEvent.payload.approval).toBe("approved");
+    }
+  });
+
+  it("emits weave.node-verified + weave.phase-approved + weave.exited when this completes the last phase", async () => {
+    const p = buildRunningProjection({
+      nodes: [
+        { id: "node-1", phaseId: "phase-1", status: "verified" },
+        { id: "node-2", phaseId: "phase-1", status: "running" }, // verifying this one
+      ],
+      phases: [{ id: "phase-1", ordinal: 0 }], // only phase
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.verified",
+          commandId: CommandId.make("cmd-v"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-2"),
+          verifierOutcome: "Everything verified.",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(3);
+    expect(events[0]?.type).toBe("weave.node-verified");
+    expect(events[1]?.type).toBe("weave.phase-approved");
+    expect(events[2]?.type).toBe("weave.exited");
+    const exitEvent = events[2];
+    if (exitEvent !== undefined && exitEvent.type === "weave.exited") {
+      expect(exitEvent.payload.reason).toBe("complete");
+    }
+  });
+
+  it("rejects when verifierOutcome is empty string", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "running" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.verified",
+            commandId: CommandId.make("cmd-v"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            verifierOutcome: "   ", // whitespace-only
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("non-empty");
+  });
+
+  it("rejects when node is not in running status", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "pending" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.verified",
+            commandId: CommandId.make("cmd-v"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            verifierOutcome: "Done.",
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("status is 'pending'");
+  });
+});
+
+describe("decideWeaveCommand — weave.node.failed", () => {
+  it("emits weave.node-failed when node is running", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "running" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.failed",
+          commandId: CommandId.make("cmd-f"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          reason: "Timed out after 60s.",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-failed");
+    const first = events[0];
+    if (first !== undefined && first.type === "weave.node-failed") {
+      expect(first.payload.reason).toBe("Timed out after 60s.");
+      expect(first.payload.nodeId).toBe(WeaveNodeId.make("node-1"));
+    }
+  });
+
+  it("rejects when node is not in running status", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "pending" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.failed",
+            commandId: CommandId.make("cmd-f"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            reason: "failed",
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("status is 'pending'");
   });
 });

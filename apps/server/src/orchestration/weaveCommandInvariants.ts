@@ -141,3 +141,22 @@ export function requirePhasePending(input: {
     `phase '${input.phaseId}' has approval '${approval}'; expected 'pending'.`,
   );
 }
+
+// Ancestors
+
+export function requireAncestorsVerified(input: {
+  readonly projection: WeaveRunProjection;
+  readonly command: WeaveCommand;
+  readonly node: WeaveNode;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  for (const ancestorId of input.node.dependsOn) {
+    const status = input.projection.nodeStatuses.get(ancestorId);
+    if (status !== "verified") {
+      return fail(
+        input.command,
+        `ancestor '${ancestorId}' of node '${input.node.id}' has status '${status ?? "unknown"}'; expected 'verified'.`,
+      );
+    }
+  }
+  return Effect.void;
+}
