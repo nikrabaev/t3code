@@ -16,6 +16,8 @@ import {
   requireBlueprintVersion,
   requireNode,
   requireNodeStatus,
+  requireOpenDecision,
+  requirePhasePending,
   requireRun,
   requireRunAbsent,
   requireRunNotTerminal,
@@ -290,12 +292,85 @@ export function decideWeaveCommand(input: {
         ];
       });
     }
-    // Placeholder for Tasks 7–9.
+    case "weave.decision.resolve": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+        yield* requireOpenDecision({
+          projection: run,
+          command,
+          decisionId: command.decisionId,
+        });
+        return [
+          envelope({
+            type: "weave.decision-resolved",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              decisionId: command.decisionId,
+              answer: command.answer,
+              byUser: command.byUser,
+              ...(command.rationale !== undefined && { rationale: command.rationale }),
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
+    }
+    case "weave.phase.approve": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+        yield* requirePhasePending({
+          projection: run,
+          command,
+          phaseId: command.phaseId,
+        });
+        const results: PlannedWeaveEvent[] = [
+          envelope({
+            type: "weave.phase-approved",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              phaseId: command.phaseId,
+              approval: command.approval,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+        if (
+          command.approval === "approved" &&
+          run.currentBlueprint !== null &&
+          isLastPhase(run.currentBlueprint, command.phaseId)
+        ) {
+          results.push(
+            envelope({
+              type: "weave.exited",
+              weaveRunId: command.weaveRunId,
+              occurredAt: command.createdAt,
+              commandId: command.commandId,
+              payload: {
+                weaveRunId: command.weaveRunId,
+                reason: "complete",
+                occurredAt: command.createdAt,
+              },
+            }),
+          );
+        }
+        return results;
+      });
+    }
     default: {
+      const _exhaustive: never = command;
+      void _exhaustive;
       return Effect.fail(
         new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Decider does not yet handle '${command.type}' (pending Slice 2 tasks).`,
+          commandType: (command as { type: string }).type,
+          detail: `Unknown weave command type.`,
         }),
       );
     }
