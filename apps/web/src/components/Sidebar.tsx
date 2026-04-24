@@ -40,6 +40,7 @@ import {
   type ContextMenuItem,
   type DesktopUpdateState,
   ProjectId,
+  type ScopedProjectRef,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
   type ThreadEnvMode,
@@ -184,6 +185,8 @@ import {
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
+import { WeaveRunSidebarItem } from "./weave/WeaveRunSidebarItem";
+import { useWeaveRunsForProject } from "../weave/weaveStore";
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
@@ -2075,6 +2078,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         collapseThreadListForProject={collapseThreadListForProject}
       />
 
+      <SidebarProjectWeaveRunsList
+        projectKey={project.projectKey}
+        memberProjectRefs={project.memberProjectRefs}
+      />
+
       <Dialog
         open={projectRenameTarget !== null}
         onOpenChange={(open) => {
@@ -2193,6 +2201,48 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         </DialogPopup>
       </Dialog>
     </>
+  );
+});
+
+interface SidebarProjectWeaveRunsListProps {
+  readonly projectKey: string;
+  readonly memberProjectRefs: readonly ScopedProjectRef[];
+}
+
+const SidebarProjectWeaveRunsList = memo(function SidebarProjectWeaveRunsList({
+  projectKey,
+  memberProjectRefs,
+}: SidebarProjectWeaveRunsListProps) {
+  const routeWeaveRunId = useParams({
+    strict: false,
+    select: (params) => (params.weaveRunId as string | undefined) ?? null,
+  });
+
+  // Fetch weave runs for all member projects in this logical project
+  const allWeaveRuns = memberProjectRefs.flatMap((ref) => {
+    const weaveRuns = useWeaveRunsForProject(ref.environmentId, ref.projectId);
+    return weaveRuns.map((run) => ({
+      environmentId: ref.environmentId,
+      weaveRun: run,
+    }));
+  });
+
+  if (allWeaveRuns.length === 0) {
+    return null;
+  }
+
+  return (
+    <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0">
+      {allWeaveRuns.map(({ environmentId, weaveRun }) => (
+        <SidebarMenuSubItem key={weaveRun.id} className="w-full" data-weave-run={weaveRun.id}>
+          <WeaveRunSidebarItem
+            environmentId={environmentId}
+            weaveRun={weaveRun}
+            active={routeWeaveRunId === weaveRun.id}
+          />
+        </SidebarMenuSubItem>
+      ))}
+    </SidebarMenuSub>
   );
 });
 
