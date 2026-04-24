@@ -1,8 +1,10 @@
 import {
+  BlueprintVersion,
   CommandId,
   EventId,
   ProjectId,
   ThreadId,
+  WeaveRunId,
   type OrchestrationEvent,
 } from "@t3tools/contracts";
 import { Effect } from "effect";
@@ -911,5 +913,173 @@ describe("orchestration projector", () => {
     expect(thread?.checkpoints).toHaveLength(500);
     expect(thread?.checkpoints[0]?.turnId).toBe("turn-100");
     expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
+  });
+});
+
+describe("orchestration projector — weave events", () => {
+  const NOW = "2026-04-24T00:00:00.000Z";
+  const RUN_ID = WeaveRunId.make("weave-run-1");
+  const PROJECT_ID = ProjectId.make("project-1");
+
+  function makeWeaveEvent(input: {
+    sequence: number;
+    type:
+      | "weave.created"
+      | "weave.blueprint-compiled"
+      | "weave.blueprint-approved"
+      | "weave.node-dispatched"
+      | "weave.node-verified"
+      | "weave.node-failed"
+      | "weave.decision-resolved"
+      | "weave.phase-approved"
+      | "weave.exited";
+    payload: unknown;
+  }): OrchestrationEvent {
+    return {
+      sequence: input.sequence,
+      eventId: EventId.make(`weave-event-${input.sequence}`),
+      type: input.type,
+      aggregateKind: "weave",
+      aggregateId: RUN_ID,
+      occurredAt: NOW,
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: input.payload as never,
+    } as OrchestrationEvent;
+  }
+
+  it("projects weave.created — adds a new run with status=draft", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    const next = await Effect.runPromise(
+      projectEvent(
+        initial,
+        makeWeaveEvent({
+          sequence: 1,
+          type: "weave.created",
+          payload: {
+            weaveRunId: RUN_ID,
+            projectId: PROJECT_ID,
+            title: "My feature",
+            vision: "Ship it",
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+
+    expect(next.weaveRuns.size).toBe(1);
+    const projection = next.weaveRuns.get(RUN_ID);
+    expect(projection).toBeDefined();
+    expect(projection?.run.status).toBe("draft");
+    expect(projection?.run.id).toBe(RUN_ID);
+  });
+
+  it("projects weave.blueprint-compiled on top of weave.created — status becomes reviewing", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    const afterCreate = await Effect.runPromise(
+      projectEvent(
+        initial,
+        makeWeaveEvent({
+          sequence: 1,
+          type: "weave.created",
+          payload: {
+            weaveRunId: RUN_ID,
+            projectId: PROJECT_ID,
+            title: "My feature",
+            vision: "Ship it",
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+
+    const minimalBlueprint = {
+      version: BlueprintVersion.make(1),
+      nodes: [],
+      phases: [],
+      contracts: [],
+      decisions: [],
+      compiledAt: NOW,
+      compiledBy: "planner" as const,
+    };
+
+    const afterCompile = await Effect.runPromise(
+      projectEvent(
+        afterCreate,
+        makeWeaveEvent({
+          sequence: 2,
+          type: "weave.blueprint-compiled",
+          payload: {
+            weaveRunId: RUN_ID,
+            version: BlueprintVersion.make(1),
+            blueprint: minimalBlueprint,
+            compiledBy: "planner" as const,
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+
+    expect(afterCompile.weaveRuns.size).toBe(1);
+    const projection = afterCompile.weaveRuns.get(RUN_ID);
+    expect(projection?.run.status).toBe("reviewing");
+    expect(projection?.currentBlueprint).toEqual(minimalBlueprint);
+  });
+
+  it("unrelated thread event does not mutate weaveRuns", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    const afterCreate = await Effect.runPromise(
+      projectEvent(
+        initial,
+        makeWeaveEvent({
+          sequence: 1,
+          type: "weave.created",
+          payload: {
+            weaveRunId: RUN_ID,
+            projectId: PROJECT_ID,
+            title: "My feature",
+            vision: "Ship it",
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+
+    const afterThread = await Effect.runPromise(
+      projectEvent(afterCreate, {
+        sequence: 2,
+        eventId: EventId.make("thread-event-2"),
+        type: "thread.created",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-99"),
+        occurredAt: NOW,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: "thread-99",
+          projectId: PROJECT_ID,
+          title: "Some thread",
+          modelSelection: { provider: "codex", model: "gpt-5" },
+          runtimeMode: "full-access",
+          branch: null,
+          worktreePath: null,
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      } as OrchestrationEvent),
+    );
+
+    // weaveRuns unchanged — same size and same projection object
+    expect(afterThread.weaveRuns.size).toBe(1);
+    expect(afterThread.weaveRuns.get(RUN_ID)).toBe(afterCreate.weaveRuns.get(RUN_ID));
+    // thread was added
+    expect(afterThread.threads).toHaveLength(1);
   });
 });

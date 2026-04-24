@@ -173,6 +173,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         },
       },
     ],
+    weaveRuns: new Map(),
     updatedAt: NOW_ISO,
   };
 }

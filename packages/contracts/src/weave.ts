@@ -405,3 +405,38 @@ export const WeaveExitedPayload = Schema.Struct({
   occurredAt: IsoDateTime,
 });
 export type WeaveExitedPayload = typeof WeaveExitedPayload.Type;
+
+// --- WeaveRunProjection ---
+// The accumulated read-model state for one WeaveRun. Promoted to contracts in
+// Slice 3 Task 3 so OrchestrationReadModel.weaveRuns can reference the schema.
+//
+// Map/Set fields use Schema.ReadonlyMap / Schema.ReadonlySet (available in
+// Effect 4 beta ≥4.0.0-beta.45). Both serialize as arrays for JSON roundtrip:
+//   ReadonlyMap → ReadonlyArray<readonly [Key, Value]>
+//   ReadonlySet  → ReadonlyArray<Value>
+export const WeaveRunProjectionSchema = Schema.Struct({
+  run: WeaveRun,
+  currentBlueprint: Schema.NullOr(Blueprint),
+  // ReadonlyMap<WeaveNodeId, WeaveNodeStatus>
+  nodeStatuses: Schema.ReadonlyMap(WeaveNodeId, WeaveNodeStatus),
+  // ReadonlySet<WeaveDecisionId>
+  openDecisions: Schema.ReadonlySet(WeaveDecisionId),
+  autoDecisionLog: Schema.Array(
+    Schema.Struct({
+      decisionId: WeaveDecisionId,
+      answer: Schema.String,
+      at: IsoDateTime,
+    }),
+  ),
+  // ReadonlyMap<WeavePhaseId, WeavePhaseApproval>
+  phaseApprovals: Schema.ReadonlyMap(WeavePhaseId, WeavePhaseApproval),
+  // ReadonlyMap<WeaveNodeId, { threadId: ThreadId; worktreePath: string }>
+  childThreads: Schema.ReadonlyMap(
+    WeaveNodeId,
+    Schema.Struct({
+      threadId: ThreadId,
+      worktreePath: Schema.String,
+    }),
+  ),
+});
+export type WeaveRunProjection = typeof WeaveRunProjectionSchema.Type;

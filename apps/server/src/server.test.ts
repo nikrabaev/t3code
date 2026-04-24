@@ -164,6 +164,7 @@ const makeDefaultOrchestrationReadModel = () => {
         deletedAt: null,
       },
     ],
+    weaveRuns: new Map(),
   };
 };
 
@@ -2908,6 +2909,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             deletedAt: null,
           },
         ],
+        weaveRuns: new Map(),
       };
 
       yield* buildAppUnderTest({

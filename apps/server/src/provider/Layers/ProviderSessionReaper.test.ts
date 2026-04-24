@@ -94,6 +94,7 @@ function makeReadModel(
       checkpoints: [],
       deletedAt: null,
     })),
+    weaveRuns: new Map(),
   };
 }
 

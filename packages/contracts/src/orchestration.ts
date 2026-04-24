@@ -40,6 +40,7 @@ import {
   WeavePhaseApproveCommand,
   WeavePhaseApprovedPayload,
   WeaveRunId,
+  WeaveRunProjectionSchema,
 } from "./weave.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
@@ -349,6 +350,10 @@ export const OrchestrationReadModel = Schema.Struct({
   snapshotSequence: NonNegativeInt,
   projects: Schema.Array(OrchestrationProject),
   threads: Schema.Array(OrchestrationThread),
+  // Keyed by WeaveRunId. Serializes as ReadonlyArray<readonly [WeaveRunId, WeaveRunProjection]>
+  // (Effect 4 beta Schema.ReadonlyMap wire format). Snapshot persistence is added in Slice 3 Task 4;
+  // until then the snapshot always provides an empty map.
+  weaveRuns: Schema.ReadonlyMap(WeaveRunId, WeaveRunProjectionSchema),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;

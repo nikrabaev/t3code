@@ -138,6 +138,7 @@ describe("OrchestrationEngine", () => {
           session: null,
         },
       ],
+      weaveRuns: new Map(),
     };
 
     const layer = OrchestrationEngineLive.pipe(

@@ -934,6 +934,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 snapshotSequence: computeSnapshotSequence(stateRows),
                 projects,
                 threads,
+                // Weave run projections are not persisted in the snapshot DB yet
+                // (Task 4 adds that). Always start with an empty map here.
+                weaveRuns: new Map(),
                 updatedAt: updatedAt ?? new Date(0).toISOString(),
               };
 

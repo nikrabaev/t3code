@@ -1,5 +1,4 @@
 import type {
-  Blueprint,
   IsoDateTime,
   MessageId,
   OrchestrationEvent,
@@ -13,33 +12,15 @@ import type {
   WeaveRun,
   WeaveRunId,
   WeaveRunStatus,
+  WeaveRunProjection as WeaveRunProjectionFromContracts,
 } from "@t3tools/contracts";
 import { Effect } from "effect";
 
 import { OrchestrationProjectorDecodeError } from "./Errors.ts";
 
-// A WeaveRunProjection is the state accumulated for one Weave Run by replaying
-// that run's events. It is server-internal (not part of OrchestrationReadModel).
-// Slice 3 will own a container store keyed by WeaveRunId.
-export type WeaveRunProjection = {
-  readonly run: WeaveRun;
-  readonly currentBlueprint: Blueprint | null;
-  readonly nodeStatuses: ReadonlyMap<WeaveNodeId, WeaveNodeStatus>;
-  readonly openDecisions: ReadonlySet<WeaveDecisionId>;
-  readonly autoDecisionLog: ReadonlyArray<{
-    readonly decisionId: WeaveDecisionId;
-    readonly answer: string;
-    readonly at: IsoDateTime;
-  }>;
-  readonly phaseApprovals: ReadonlyMap<WeavePhaseId, WeavePhaseApproval>;
-  readonly childThreads: ReadonlyMap<
-    WeaveNodeId,
-    {
-      readonly threadId: ThreadId;
-      readonly worktreePath: string;
-    }
-  >;
-};
+// WeaveRunProjection is now a contracts-level type (packages/contracts/src/weave.ts).
+// Re-exported here so existing importers (weaveDecider.ts, command invariants) are unaffected.
+export type WeaveRunProjection = WeaveRunProjectionFromContracts;
 
 // Narrowed weave-only event variants (no sequence field; projector takes a
 // fully-envelope'd event since it may need eventId / aggregateId / metadata).

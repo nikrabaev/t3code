@@ -99,6 +99,7 @@ const readModel: OrchestrationReadModel = {
       deletedAt: null,
     },
   ],
+  weaveRuns: new Map(),
 };
 
 const messageSendCommand: OrchestrationCommand = {

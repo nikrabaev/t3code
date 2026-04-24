@@ -11,6 +11,7 @@ import {
   OrchestrationEvent,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
+  OrchestrationReadModel,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
@@ -879,3 +880,23 @@ it("documents that AggregateRef brand enforcement is compile-time only (runtime 
   });
   assert.strictEqual(decoded.aggregateKind, "project");
 });
+
+// OrchestrationReadModel.weaveRuns round-trip test.
+// Schema.ReadonlyMap encodes as ReadonlyArray<readonly [key, value]>, so an
+// empty map encodes as [] and decodes back to an empty ReadonlyMap.
+it.effect("decodes OrchestrationReadModel with empty weaveRuns", () =>
+  Effect.gen(function* () {
+    const decodeReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
+    const now = "2026-04-24T00:00:00.000Z";
+    const decoded = yield* decodeReadModel({
+      snapshotSequence: 0,
+      projects: [],
+      threads: [],
+      weaveRuns: new Map(),
+      updatedAt: now,
+    });
+    assert.strictEqual(decoded.snapshotSequence, 0);
+    assert.strictEqual(decoded.weaveRuns.size, 0);
+    assert.strictEqual(decoded.updatedAt, now);
+  }),
+);

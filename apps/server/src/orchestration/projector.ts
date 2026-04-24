@@ -8,6 +8,7 @@ import {
 import { Effect, Schema } from "effect";
 
 import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "./Errors.ts";
+import { projectWeaveEvent } from "./weaveProjector.ts";
 import {
   MessageSentPayloadSchema,
   ProjectCreatedPayload,
@@ -160,6 +161,7 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     snapshotSequence: 0,
     projects: [],
     threads: [],
+    weaveRuns: new Map(),
     updatedAt: nowIso,
   };
 }
@@ -647,6 +649,26 @@ export function projectEvent(
           };
         }),
       );
+
+    case "weave.created":
+    case "weave.blueprint-compiled":
+    case "weave.blueprint-approved":
+    case "weave.node-dispatched":
+    case "weave.node-verified":
+    case "weave.node-failed":
+    case "weave.decision-resolved":
+    case "weave.phase-approved":
+    case "weave.exited": {
+      const runId = event.payload.weaveRunId;
+      const existing = model.weaveRuns.get(runId) ?? null;
+      return projectWeaveEvent(existing, event).pipe(
+        Effect.map((next) => {
+          const nextWeaveRuns = new Map(model.weaveRuns);
+          nextWeaveRuns.set(runId, next);
+          return { ...nextBase, weaveRuns: nextWeaveRuns };
+        }),
+      );
+    }
 
     default:
       return Effect.succeed(nextBase);

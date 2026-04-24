@@ -364,6 +364,7 @@ function createSnapshotForTargetUser(options: {
         },
       },
     ],
+    weaveRuns: new Map(),
     updatedAt: NOW_ISO,
   };
 }
