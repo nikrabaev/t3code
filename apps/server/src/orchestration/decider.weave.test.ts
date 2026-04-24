@@ -1,8 +1,8 @@
 import {
+  BlueprintVersion,
   CommandId,
   ProjectId,
   WeaveRunId,
-  type OrchestrationCommand,
   type OrchestrationReadModel,
 } from "@t3tools/contracts";
 import { Effect } from "effect";
@@ -107,12 +107,13 @@ describe("decider weave routes", () => {
             type: "weave.blueprint.approve",
             commandId: asCommandId("cmd-blueprint-approve-1"),
             weaveRunId: asWeaveRunId("run-1"),
-            blueprintVersion: 1,
+            blueprintVersion: BlueprintVersion.make(1),
+            concurrencyCap: 1,
             createdAt: now,
-          } as Extract<OrchestrationCommand, { type: "weave.blueprint.approve" }>,
+          },
           readModel,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow("weave run status is 'draft'; expected one of [reviewing].");
   });
 });
