@@ -1,11 +1,4 @@
-import {
-  CommandId,
-  DEFAULT_PROVIDER_INTERACTION_MODE,
-  ProjectId,
-  ThreadId,
-  WeaveRunId,
-  type OrchestrationEvent,
-} from "@t3tools/contracts";
+import { CommandId, ProjectId, WeaveRunId, type OrchestrationEvent } from "@t3tools/contracts";
 import { Effect, Layer, ManagedRuntime, Queue, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +8,7 @@ import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import { RepositoryIdentityResolverLive } from "../../project/Layers/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "../../config.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { WeaveEngineService } from "../Services/WeaveEngine.ts";
 import { WeaveEngineLive } from "./WeaveEngine.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
@@ -109,14 +103,12 @@ describe("WeaveEngine", () => {
     await system.dispose();
   });
 
-  it("streamWeaveEvents yields weave.created and skips thread events", async () => {
-    const system = await createWeaveEngineSystem();
-    const { weaveEngine } = system;
+  it("streamWeaveEvents yields weave.created and skips non-weave events", async () => {
     const createdAt = now();
 
-    // First, set up the orchestration system layer directly so we can dispatch
-    // a thread.create alongside the weave.create. We do this by accessing the
-    // underlying runtime and dispatching both commands.
+    // Build a layer that exposes both WeaveEngineService and
+    // OrchestrationEngineService so we can dispatch both weave and non-weave
+    // commands from the same runtime.
     const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
       prefix: "t3-weave-engine-stream-test-",
     });
@@ -131,25 +123,23 @@ describe("WeaveEngine", () => {
       Layer.provideMerge(NodeServices.layer),
     );
     const weaveEngineLayer = WeaveEngineLive.pipe(Layer.provide(orchestrationLayer));
-
-    // Build a combined layer that exposes both WeaveEngineService and
-    // OrchestrationEngineLive so we can dispatch thread commands too.
     const combinedLayer = Layer.provideMerge(weaveEngineLayer, orchestrationLayer);
     const streamRuntime = ManagedRuntime.make(combinedLayer);
 
     try {
-      const capturedTypes: string[] = [];
+      const weaveEventTypes: string[] = [];
 
       await streamRuntime.runPromise(
         Effect.gen(function* () {
           const weave = yield* WeaveEngineService;
-          const eventQueue = yield* Queue.unbounded<OrchestrationEvent>();
+          const engine = yield* OrchestrationEngineService;
+          const weaveQueue = yield* Queue.unbounded<OrchestrationEvent>();
 
-          // Subscribe to the filtered stream — take exactly 1 event.
+          // Subscribe to the filtered stream — take exactly 1 weave event.
           yield* Effect.forkScoped(
             Stream.take(weave.streamWeaveEvents, 1).pipe(
               Stream.runForEach((event) =>
-                Queue.offer(eventQueue, event as OrchestrationEvent).pipe(Effect.asVoid),
+                Queue.offer(weaveQueue, event as OrchestrationEvent).pipe(Effect.asVoid),
               ),
             ),
           );
@@ -157,28 +147,40 @@ describe("WeaveEngine", () => {
           // Give the subscriber a moment to attach.
           yield* Effect.sleep("10 millis");
 
-          // Dispatch a project first so thread.create can reference it.
+          // Dispatch a non-weave command (project.create → project.created).
+          yield* engine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make("cmd-stream-project-create"),
+            projectId: asProjectId("project-stream-filter-test"),
+            title: "Filter Test Project",
+            workspaceRoot: "/tmp/project-stream-filter-test",
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt,
+          });
+
+          // Dispatch the weave command — this should come through the filtered stream.
           yield* weave.dispatchWeaveCommand({
             type: "weave.create",
             commandId: CommandId.make("cmd-stream-weave-create"),
             weaveRunId: WeaveRunId.make("run-stream-test"),
-            projectId: asProjectId("project-stream-test"),
+            projectId: asProjectId("project-stream-filter-test"),
             title: "Stream Test Weave",
             vision: "vision for stream filter test",
             createdAt,
           });
 
-          // Collect the weave event from the queue.
-          const weaveEvent = yield* Queue.take(eventQueue);
-          capturedTypes.push(weaveEvent.type);
+          // Collect the one weave event that the filtered stream yields.
+          const weaveEvent = yield* Queue.take(weaveQueue);
+          weaveEventTypes.push(weaveEvent.type);
         }).pipe(Effect.scoped),
       );
 
-      expect(capturedTypes).toEqual(["weave.created"]);
-      expect(capturedTypes.some((t) => t.startsWith("thread."))).toBe(false);
+      // The filtered stream must yield weave.created …
+      expect(weaveEventTypes).toEqual(["weave.created"]);
+      // … and must never leak the non-weave project.created event.
+      expect(weaveEventTypes.some((t) => t.startsWith("project."))).toBe(false);
     } finally {
       await streamRuntime.dispose();
     }
-    await system.dispose();
   });
 });
