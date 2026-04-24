@@ -150,6 +150,7 @@ describe("ProviderSessionReaper", () => {
       readEvents: () => Stream.empty,
       dispatch: () => unsupported(),
       streamDomainEvents: Stream.empty,
+      appendSystemEvent: () => unsupported(),
     };
 
     const runtimeRepositoryLayer = ProviderSessionRuntimeRepositoryLive.pipe(

@@ -306,10 +306,28 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       return yield* Deferred.await(result);
     });
 
+  // appendSystemEvent: persist an event that was not produced by the decider.
+  // Bypasses the command queue — no receipt is written (no commandId).
+  // v0.1 note: racing with concurrent command dispatch can interleave readModel
+  // reads, but the planner only fires on weave.created which has already settled.
+  // Projection errors are treated as defects (orDie) because the event is already
+  // persisted at that point; a decode error in the projector is a bug, not a
+  // recoverable domain failure.
+  const appendSystemEvent: OrchestrationEngineShape["appendSystemEvent"] = (event) =>
+    Effect.gen(function* () {
+      const savedEvent = yield* eventStore.append(event);
+      const nextReadModel = yield* projectEvent(readModel, savedEvent).pipe(Effect.orDie);
+      readModel = nextReadModel;
+      yield* projectionPipeline.projectEvent(savedEvent).pipe(Effect.orDie);
+      yield* PubSub.publish(eventPubSub, savedEvent);
+      return { sequence: savedEvent.sequence };
+    });
+
   return {
     getReadModel,
     readEvents,
     dispatch,
+    appendSystemEvent,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (wsServer, ProviderRuntimeIngestion, CheckpointReactor, etc.)
     // each independently receive all domain events.

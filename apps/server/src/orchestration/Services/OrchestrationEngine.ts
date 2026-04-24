@@ -61,6 +61,23 @@ export interface OrchestrationEngineShape {
    * This is a hot runtime stream (new events only), not a historical replay.
    */
   readonly streamDomainEvents: Stream.Stream<OrchestrationEvent>;
+
+  /**
+   * Persist an event that was not produced by the decider (planner output,
+   * scheduler output, etc.). Assigns a sequence from the event store, projects
+   * the event into the read model, and broadcasts via the domain-event stream.
+   *
+   * No command receipt is written — there is no commandId associated with
+   * system-generated events. Call sites must supply all envelope fields except
+   * `sequence` (assigned here).
+   *
+   * NOTE (v0.1): this method bypasses the command queue and mutates `readModel`
+   * directly. Concurrent calls can interleave with in-flight command dispatches.
+   * The planner only fires after `weave.created`, so this is acceptable for v0.1.
+   */
+  readonly appendSystemEvent: (
+    event: Omit<OrchestrationEvent, "sequence">,
+  ) => Effect.Effect<{ sequence: number }, OrchestrationEventStoreError>;
 }
 
 /**

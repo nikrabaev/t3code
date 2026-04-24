@@ -159,6 +159,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
             Effect.as({ sequence: 1 }),
           ),
         streamDomainEvents: Stream.empty,
+        appendSystemEvent: () => Effect.die("unused"),
       } satisfies OrchestrationEngineShape),
       Effect.provide(NodeServices.layer),
     );
@@ -198,6 +199,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when 
             Effect.as({ sequence: 1 }),
           ),
         streamDomainEvents: Stream.empty,
+        appendSystemEvent: () => Effect.die("unused"),
       } satisfies OrchestrationEngineShape),
       Effect.provide(NodeServices.layer),
     );
