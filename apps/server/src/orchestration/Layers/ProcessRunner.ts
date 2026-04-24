@@ -1,70 +1,48 @@
 /**
- * ProcessRunnerLive - Default layer for ProcessRunner using node:child_process.spawn.
+ * ProcessRunnerLive - Default layer for ProcessRunner delegating to the shared
+ * `runProcess` utility in `apps/server/src/processRunner.ts`.
  *
- * Collects stdout and stderr up to 1 MB each. Kills the child process with
- * SIGKILL when `timeoutMs` elapses and reports `timedOut: true`.
+ * The underlying utility provides:
+ *  - 8 MB buffer cap per stream (vs the old 1 MB)
+ *  - `stdoutTruncated` / `stderrTruncated` flags
+ *  - SIGTERM → 1 s grace → SIGKILL graceful shutdown
+ *  - Byte-accurate UTF-8 slicing that never splits multibyte chars
+ *  - `settled` guard preventing double-resolution on ENOENT
+ *
+ * This adapter translates between the `runProcess` API and `ProcessRunnerShape`.
  *
  * @module ProcessRunnerLive
  */
-import { spawn } from "node:child_process";
 import { Effect, Layer } from "effect";
 
+import { runProcess } from "../../processRunner.ts";
 import {
   ProcessRunner,
   ProcessRunnerError,
   type ProcessRunnerShape,
-  type ProcessRunnerResult,
 } from "../Services/ProcessRunner.ts";
-
-const MAX_OUTPUT_BYTES = 1024 * 1024; // 1 MB per stream
 
 const makeProcessRunner = Effect.succeed({
   run: (input) =>
-    Effect.callback<ProcessRunnerResult, ProcessRunnerError>((resume) => {
-      const child = spawn(input.command, [...input.args], {
-        cwd: input.cwd,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, input.timeoutMs);
-
-      child.stdout?.on("data", (chunk: Buffer) => {
-        const remaining = MAX_OUTPUT_BYTES - stdout.length;
-        if (remaining > 0) {
-          stdout += chunk.toString("utf8", 0, Math.min(chunk.length, remaining));
-        }
-      });
-
-      child.stderr?.on("data", (chunk: Buffer) => {
-        const remaining = MAX_OUTPUT_BYTES - stderr.length;
-        if (remaining > 0) {
-          stderr += chunk.toString("utf8", 0, Math.min(chunk.length, remaining));
-        }
-      });
-
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        resume(Effect.fail(new ProcessRunnerError({ reason: `spawn failed: ${err.message}` })));
-      });
-
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resume(
-          Effect.succeed({
-            exitCode: timedOut ? -1 : (code ?? -1),
-            stdout,
-            stderr,
-            timedOut,
-          }),
-        );
-      });
+    Effect.tryPromise({
+      try: () =>
+        runProcess(input.command, [...input.args], {
+          cwd: input.cwd,
+          timeoutMs: input.timeoutMs,
+          allowNonZeroExit: true,
+          outputMode: "truncate",
+        }).then((result) => ({
+          exitCode: result.timedOut ? -1 : (result.code ?? -1),
+          stdout: result.stdout,
+          stderr: result.stderr,
+          timedOut: result.timedOut,
+          stdoutTruncated: result.stdoutTruncated ?? false,
+          stderrTruncated: result.stderrTruncated ?? false,
+        })),
+      catch: (error) =>
+        new ProcessRunnerError({
+          reason: error instanceof Error ? error.message : String(error),
+        }),
     }),
 } satisfies ProcessRunnerShape);
 

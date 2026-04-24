@@ -25,7 +25,7 @@ import {
   WeaveRunId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -297,6 +297,8 @@ describe("WeaveContractConformer", () => {
       stdout: "",
       stderr: "",
       timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
     });
 
     const orphanThreadId = ThreadId.make(crypto.randomUUID());
@@ -337,6 +339,8 @@ describe("WeaveContractConformer", () => {
       stdout: "All tests passed\n",
       stderr: "",
       timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
     });
 
     const { childThreadId } = await seedProjectAndRunningWeave(system, {
@@ -383,6 +387,8 @@ describe("WeaveContractConformer", () => {
       stdout: "",
       stderr: "1 test failed\n",
       timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
     });
 
     const { childThreadId } = await seedProjectAndRunningWeave(system, {
@@ -414,6 +420,23 @@ describe("WeaveContractConformer", () => {
 
     const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     expect(projection?.nodeStatuses.get(WeaveNodeId.make(nodeId))).toBe("failed");
+
+    // Assert failure reason contains the exit code (not a timeout reason).
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const failedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-failed" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(failedEvent).toBeDefined();
+    const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
+    expect(reason).toContain("exit 1");
+    expect(reason).not.toBe("timeout");
 
     await system.dispose();
   });
@@ -428,6 +451,8 @@ describe("WeaveContractConformer", () => {
       stdout: "",
       stderr: "",
       timedOut: true,
+      stdoutTruncated: false,
+      stderrTruncated: false,
     });
 
     const { childThreadId } = await seedProjectAndRunningWeave(system, {
@@ -459,6 +484,22 @@ describe("WeaveContractConformer", () => {
 
     const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     expect(projection?.nodeStatuses.get(WeaveNodeId.make(nodeId))).toBe("failed");
+
+    // Assert failure reason is exactly "timeout" (not an exit-code reason).
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const failedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-failed" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(failedEvent).toBeDefined();
+    const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
+    expect(reason).toBe("timeout");
 
     await system.dispose();
   });

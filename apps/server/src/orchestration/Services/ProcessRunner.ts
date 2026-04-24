@@ -17,12 +17,16 @@ export class ProcessRunnerError extends Data.TaggedError("ProcessRunnerError")<{
 export interface ProcessRunnerResult {
   /** Exit code from the process. -1 when the process was killed (timeout). */
   readonly exitCode: number;
-  /** Captured stdout, truncated to 1 MB. */
+  /** Captured stdout (may be truncated by the underlying runner). */
   readonly stdout: string;
-  /** Captured stderr, truncated to 1 MB. */
+  /** Captured stderr (may be truncated by the underlying runner). */
   readonly stderr: string;
   /** True when the process was killed because it exceeded `timeoutMs`. */
   readonly timedOut: boolean;
+  /** True when stdout was truncated at the buffer cap. */
+  readonly stdoutTruncated: boolean;
+  /** True when stderr was truncated at the buffer cap. */
+  readonly stderrTruncated: boolean;
 }
 
 export interface ProcessRunnerShape {
