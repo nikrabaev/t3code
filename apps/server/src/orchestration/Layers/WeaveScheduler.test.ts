@@ -16,6 +16,7 @@ import {
   Blueprint,
   BlueprintVersion,
   CommandId,
+  EventId,
   ProjectId,
   ThreadId,
   WeaveNodeId,
@@ -23,7 +24,7 @@ import {
   WeaveRunId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { describe, expect, it, vi } from "vitest";
 
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -405,6 +406,17 @@ describe("WeaveScheduler", () => {
     expect(weaveChildThread).toBeDefined();
     expect(weaveChildThread?.interactionMode).toBe("default");
 
+    // Verify that thread.turn.start was actually dispatched: replay all events
+    // from the event store and assert a "thread.turn-start-requested" event
+    // exists for the child thread. This would be absent if the scheduler's
+    // final step (step 7) were silently removed.
+    const allEvents = await system.run(Stream.runCollect(orchestrationEngine.readEvents(0)));
+    const childThreadId = projection?.childThreads.get(WeaveNodeId.make("node-1"))?.threadId;
+    const turnStartEvent = Array.from(allEvents).find(
+      (e) => e.type === "thread.turn-start-requested" && e.payload.threadId === childThreadId,
+    );
+    expect(turnStartEvent).toBeDefined();
+
     await system.dispose();
   });
 
@@ -569,6 +581,20 @@ describe("WeaveScheduler", () => {
   });
 
   it("skips when run status is not running (e.g. after weave.exited)", async () => {
+    /**
+     * Properly exercises the `run.run.status !== "running"` guard in
+     * processSchedulerDecision.
+     *
+     * Sequence:
+     *  1. Single-node blueprint. Approve → scheduler dispatches node-only (1 worktree call).
+     *  2. Exit the run (status → "aborted").
+     *  3. Inject a fake `weave.node-verified` event via appendSystemEvent — bypassing
+     *     the decider's status check so the scheduler actually receives the trigger.
+     *  4. Drain. Assert no second worktree call — the running-guard fires and skips.
+     *
+     * We use appendSystemEvent because `weave.node.verified` (via dispatchWeaveCommand)
+     * requires the run to be in "running" status and would be rejected after exit.
+     */
     const projectId = "project-sched-4";
     const runId = "run-sched-4";
     const system = await createSchedulerSystem("t3-weave-sched-4-");
@@ -590,7 +616,7 @@ describe("WeaveScheduler", () => {
             createdAt: now(),
           });
 
-          const blueprint = makeValidBlueprint({ nodeId: "node-exit", phaseId: "phase-1" });
+          const blueprint = makeValidBlueprint({ nodeId: "node-only", phaseId: "phase-1" });
 
           yield* weaveEngine.dispatchWeaveCommand({
             type: "weave.create",
@@ -608,7 +634,20 @@ describe("WeaveScheduler", () => {
             compiledBy: "planner",
           });
 
-          // Exit the run before approving (transitions to "aborted")
+          // Step 1: approve → scheduler dispatches node-only (worktreeCalls = 1)
+          yield* weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+
+          yield* scheduler.drain;
+          expect(stubGit.worktreeCalls).toHaveLength(1);
+
+          // Step 2: exit the run → status becomes "aborted"
           yield* weaveEngine.dispatchWeaveCommand({
             type: "weave.exit",
             commandId: CommandId.make(`cmd-exit-${runId}`),
@@ -617,25 +656,38 @@ describe("WeaveScheduler", () => {
             createdAt: now(),
           });
 
-          // Now manually push a weave.blueprint-approved-like event via the raw
-          // orchestration engine. We simulate by using a fake approved event — the
-          // scheduler will pick it up, check the run status, and skip.
-          // The easiest way: approve while in "reviewing" state is blocked since
-          // we've already exited. Instead we test by just verifying the scheduler
-          // has no createWorktree calls after processing events for an aborted run.
-          //
-          // Real test: re-create a fresh run, approve it, then exit and observe
-          // the scheduler did not attempt to dispatch a second time.
-          //
-          // We verify indirectly: the stub GitCore should have been called 0 times
-          // since we exited before approving (scheduler never got a trigger for this run).
+          // Step 3: inject a fake weave.node-verified event directly, bypassing
+          // the decider which would reject the command on an aborted run.
+          // This simulates a late verifier outcome landing after the run ended.
+          const weaveRunId = WeaveRunId.make(runId);
+          const occurredAt = now();
+          yield* orchestrationEngine.appendSystemEvent({
+            eventId: EventId.make(crypto.randomUUID()),
+            aggregateKind: "weave" as const,
+            aggregateId: weaveRunId,
+            occurredAt,
+            commandId: null,
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
+            type: "weave.node-verified",
+            payload: {
+              weaveRunId,
+              nodeId: WeaveNodeId.make("node-only"),
+              verifierOutcome: "late outcome",
+              occurredAt,
+            },
+          });
+
+          // Step 4: drain — scheduler picks up the trigger but the running-guard
+          // fires because run.status is "aborted"; no new worktree call.
           yield* scheduler.drain;
         }),
       ),
     );
 
-    // No worktree allocation should have occurred for the aborted run
-    expect(stubGit.worktreeCalls).toHaveLength(0);
+    // Still only 1 worktree call (from the initial approve), not 2.
+    expect(stubGit.worktreeCalls).toHaveLength(1);
 
     const projection = await system.run(weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     expect(projection?.run.status).toBe("aborted");

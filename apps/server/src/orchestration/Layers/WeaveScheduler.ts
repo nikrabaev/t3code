@@ -82,6 +82,9 @@ function pickNext(
 
 /**
  * Convert a node id to a branch-name-safe slug.
+ * Note: slug alone does not guarantee uniqueness across distinct node IDs
+ * (e.g. "Implement Auth" and "implement_auth" both become "implement-auth").
+ * Collisions are resolved by the hash suffix appended in `buildBranchName`.
  */
 function slugifyNodeId(id: string): string {
   return id
@@ -89,6 +92,24 @@ function slugifyNodeId(id: string): string {
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/**
+ * Compute a 6-character deterministic hex hash of the input using DJB2.
+ * Used to disambiguate branch names when slugified node IDs collide.
+ */
+function shortHash(input: string): string {
+  let h = 5381;
+  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, "0").slice(0, 6);
+}
+
+/**
+ * Build a git branch name for a node that is guaranteed unique within a run,
+ * even when two node IDs share the same slug.
+ */
+function buildBranchName(runId: string, nodeId: WeaveNodeId): string {
+  return `weave-${runId.slice(0, 8)}-${slugifyNodeId(nodeId)}-${shortHash(nodeId)}`;
 }
 
 /**
@@ -159,9 +180,9 @@ const processSchedulerDecision = Effect.fn("WeaveScheduler.processSchedulerDecis
     model: DEFAULT_MODEL_BY_PROVIDER.codex,
   };
 
-  // Build a safe branch name
-  const shortRunId = runId.slice(0, 8);
-  const branchName = `weave-${shortRunId}-${slugifyNodeId(next.id)}`;
+  // Build a safe branch name — includes a 6-char hash suffix to prevent
+  // collisions between node IDs that share the same slug.
+  const branchName = buildBranchName(runId, next.id);
 
   // Allocate the worktree
   const worktreeResult = yield* git.createWorktree({
