@@ -10,6 +10,7 @@ import {
   OrchestrationEventType,
   ProjectId,
   ThreadId,
+  WeaveRunId,
 } from "@t3tools/contracts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
@@ -20,6 +21,7 @@ import {
   toPersistenceSqlError,
   type OrchestrationEventStoreError,
 } from "../Errors.ts";
+import { aggregateRefOf } from "../../orchestration/weaveAggregateRef.ts";
 import {
   OrchestrationEventStore,
   type OrchestrationEventStoreShape,
@@ -32,7 +34,7 @@ const EventMetadataFromJsonString = Schema.fromJsonString(OrchestrationEventMeta
 const AppendEventRequestSchema = Schema.Struct({
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  streamId: Schema.Union([ProjectId, ThreadId]),
+  streamId: Schema.Union([ProjectId, ThreadId, WeaveRunId]),
   type: OrchestrationEventType,
   causationEventId: Schema.NullOr(EventId),
   correlationId: Schema.NullOr(CommandId),
@@ -48,7 +50,7 @@ const OrchestrationEventPersistedRowSchema = Schema.Struct({
   eventId: EventId,
   type: OrchestrationEventType,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId]),
+  aggregateId: Schema.Union([ProjectId, ThreadId, WeaveRunId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -179,21 +181,10 @@ const makeEventStore = Effect.gen(function* () {
   });
 
   const append: OrchestrationEventStoreShape["append"] = (event) => {
-    // Slice 1 stub: weave events use WeaveRunId as their streamId, which the
-    // current DB schema (streamId: ProjectId | ThreadId) does not yet support.
-    // Real weave event persistence ships in Slice 3.
-    if (event.aggregateKind === "weave") {
-      return Effect.die(
-        `OrchestrationEventStore.append: weave event persistence not wired yet (Slice 3). type=${event.type}`,
-      );
-    }
     return appendEventRow({
       eventId: event.eventId,
       aggregateKind: event.aggregateKind,
-      // EventBaseFields.aggregateId is ProjectId|ThreadId|WeaveRunId on every union member;
-      // TypeScript cannot narrow it from aggregateKind alone. The guard above excludes weave
-      // events so the cast is safe. Slice 3 will correlate the types properly.
-      streamId: event.aggregateId as ProjectId | ThreadId,
+      streamId: aggregateRefOf(event as OrchestrationEvent).aggregateId,
       type: event.type,
       causationEventId: event.causationEventId,
       correlationId: event.correlationId,

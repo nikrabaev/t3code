@@ -6,6 +6,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  WeaveRunId,
   type OrchestrationEvent,
 } from "@t3tools/contracts";
 import { Effect, Layer, ManagedRuntime, Metric, Option, Queue, Stream } from "effect";
@@ -31,6 +32,7 @@ import {
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ServerConfig } from "../../config.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { OrchestrationCommandReceiptRepository } from "../../persistence/Services/OrchestrationCommandReceipts.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
@@ -1024,5 +1026,62 @@ describe("OrchestrationEngine", () => {
     ).rejects.toThrow("already exists");
 
     await system.dispose();
+  });
+
+  it("stores an accepted receipt with aggregateKind=weave after a weave.create command", async () => {
+    const createdAt = now();
+    const weaveRunId = WeaveRunId.make("run-receipt-test");
+    const commandId = CommandId.make("cmd-weave-receipt");
+
+    const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
+      prefix: "t3-orchestration-engine-test-weave-receipt-",
+    });
+    // Use provideMerge so OrchestrationCommandReceiptRepository is exposed in the
+    // final layer output and available for direct queries in the test.
+    const layer = Layer.provideMerge(
+      OrchestrationEngineLive.pipe(
+        Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+        Layer.provide(OrchestrationProjectionPipelineLive),
+        Layer.provide(OrchestrationEventStoreLive),
+        Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+        Layer.provide(RepositoryIdentityResolverLive),
+        Layer.provide(SqlitePersistenceMemory),
+        Layer.provideMerge(ServerConfigLayer),
+        Layer.provideMerge(NodeServices.layer),
+      ),
+      OrchestrationCommandReceiptRepositoryLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+    );
+
+    const runtime = ManagedRuntime.make(layer);
+    try {
+      const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+      await runtime.runPromise(
+        engine.dispatch({
+          type: "weave.create",
+          commandId,
+          weaveRunId,
+          projectId: asProjectId("project-weave-receipt"),
+          title: "Receipt Test Weave",
+          vision: "test vision for receipt",
+          createdAt,
+        }),
+      );
+
+      const receipt = await runtime.runPromise(
+        Effect.gen(function* () {
+          const repo = yield* OrchestrationCommandReceiptRepository;
+          return yield* repo.getByCommandId({ commandId });
+        }),
+      );
+
+      expect(Option.isSome(receipt)).toBe(true);
+      if (Option.isSome(receipt)) {
+        expect(receipt.value.status).toBe("accepted");
+        expect(receipt.value.aggregateKind).toBe("weave");
+        expect(receipt.value.aggregateId).toBe(weaveRunId);
+      }
+    } finally {
+      await runtime.dispose();
+    }
   });
 });

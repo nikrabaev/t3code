@@ -38,6 +38,7 @@ import {
 } from "../Errors.ts";
 import { decideOrchestrationCommand } from "../decider.ts";
 import { createEmptyReadModel, projectEvent } from "../projector.ts";
+import { aggregateRefOf } from "../weaveAggregateRef.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -63,7 +64,6 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateKind: "project",
         aggregateId: command.projectId,
       };
-    // Slice 1 stub: weave commands not dispatched yet (ships in Slice 3).
     case "weave.create":
     case "weave.blueprint.approve":
     case "weave.phase.approve":
@@ -174,23 +174,15 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                 });
               }
 
-              // Slice 1 stub: weave command receipts not stored yet (ships in Slice 3).
-              // In practice weave commands never reach here in Slice 1 because the
-              // decider returns OrchestrationCommandInvariantError for all weave types.
-              if (lastSavedEvent.aggregateKind !== "weave") {
-                yield* commandReceiptRepository.upsert({
-                  commandId: envelope.command.commandId,
-                  aggregateKind: lastSavedEvent.aggregateKind,
-                  // EventBaseFields.aggregateId is ProjectId|ThreadId|WeaveRunId on every union
-                  // member — TypeScript cannot narrow it from aggregateKind alone. The guard
-                  // above ensures this is safe; Slice 3 will correlate the types properly.
-                  aggregateId: lastSavedEvent.aggregateId as ProjectId | ThreadId,
-                  acceptedAt: lastSavedEvent.occurredAt,
-                  resultSequence: lastSavedEvent.sequence,
-                  status: "accepted",
-                  error: null,
-                });
-              }
+              yield* commandReceiptRepository.upsert({
+                commandId: envelope.command.commandId,
+                aggregateKind: lastSavedEvent.aggregateKind,
+                aggregateId: aggregateRefOf(lastSavedEvent).aggregateId,
+                acceptedAt: lastSavedEvent.occurredAt,
+                resultSequence: lastSavedEvent.sequence,
+                status: "accepted",
+                error: null,
+              });
 
               return {
                 committedEvents,
@@ -271,18 +263,12 @@ const makeOrchestrationEngine = Effect.gen(function* () {
               ),
             );
 
-            // Slice 1 stub: weave command rejection receipts not stored yet (ships in Slice 3).
-            if (
-              Schema.is(OrchestrationCommandInvariantError)(error) &&
-              aggregateRef.aggregateKind !== "weave"
-            ) {
+            if (Schema.is(OrchestrationCommandInvariantError)(error)) {
               yield* commandReceiptRepository
                 .upsert({
                   commandId: envelope.command.commandId,
                   aggregateKind: aggregateRef.aggregateKind,
-                  // aggregateRef.aggregateId is ProjectId|ThreadId|WeaveRunId; the guard above
-                  // excludes "weave" so the cast is safe. Slice 3 will correlate types properly.
-                  aggregateId: aggregateRef.aggregateId as ProjectId | ThreadId,
+                  aggregateId: aggregateRef.aggregateId,
                   acceptedAt: new Date().toISOString(),
                   resultSequence: readModel.snapshotSequence,
                   status: "rejected",

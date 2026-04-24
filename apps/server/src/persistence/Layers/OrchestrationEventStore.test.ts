@@ -1,4 +1,4 @@
-import { CommandId, EventId, ProjectId } from "@t3tools/contracts";
+import { CommandId, EventId, ProjectId, WeaveRunId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, Layer, Schema, Stream } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -62,6 +62,45 @@ layer("OrchestrationEventStore", (it) => {
       assert.equal(replayed.length, 1);
       assert.equal(replayed[0]?.type, "project.created");
       assert.equal(replayed[0]?.metadata.adapterKey, "codex");
+    }),
+  );
+
+  it.effect("persists and replays a weave.created event", () =>
+    Effect.gen(function* () {
+      const eventStore = yield* OrchestrationEventStore;
+      const now = new Date().toISOString();
+      const weaveRunId = WeaveRunId.make("run-persist-weave");
+
+      const appended = yield* eventStore.append({
+        type: "weave.created",
+        eventId: EventId.make("evt-weave-persist"),
+        aggregateKind: "weave",
+        aggregateId: weaveRunId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-weave-persist"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-weave-persist"),
+        metadata: {},
+        payload: {
+          weaveRunId,
+          projectId: ProjectId.make("project-weave-persist"),
+          title: "Persist Weave",
+          vision: "test vision",
+          occurredAt: now,
+        },
+      });
+
+      assert.equal(appended.aggregateKind, "weave");
+      assert.equal(appended.aggregateId, weaveRunId);
+      assert.equal(appended.type, "weave.created");
+
+      const replayed = yield* Stream.runCollect(eventStore.readFromSequence(0, 10)).pipe(
+        Effect.map((chunk) => Array.from(chunk).filter((e) => e.aggregateKind === "weave")),
+      );
+      assert.equal(replayed.length, 1);
+      assert.equal(replayed[0]?.type, "weave.created");
+      assert.equal(replayed[0]?.aggregateKind, "weave");
+      assert.equal(replayed[0]?.aggregateId, weaveRunId);
     }),
   );
 
