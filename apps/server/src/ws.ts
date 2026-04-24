@@ -751,7 +751,12 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeWeaveRun,
             Effect.gen(function* () {
-              const weaveRun = yield* weaveEngine.getWeaveRun(input.weaveRunId);
+              const [weaveRun, snapshotSequence] = yield* Effect.all([
+                weaveEngine.getWeaveRun(input.weaveRunId),
+                orchestrationEngine
+                  .getReadModel()
+                  .pipe(Effect.map((readModel) => readModel.snapshotSequence)),
+              ]);
 
               if (weaveRun === null) {
                 return yield* new OrchestrationGetSnapshotError({
@@ -759,10 +764,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                   cause: input.weaveRunId,
                 });
               }
-
-              const snapshotSequence = yield* orchestrationEngine
-                .getReadModel()
-                .pipe(Effect.map((readModel) => readModel.snapshotSequence));
 
               const liveStream = weaveEngine.streamWeaveEvents.pipe(
                 Stream.filter((event) => event.aggregateId === input.weaveRunId),
