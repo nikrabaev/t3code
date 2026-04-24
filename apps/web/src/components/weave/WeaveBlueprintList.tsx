@@ -4,7 +4,7 @@ import { WeaveNodeCard } from "./WeaveNodeCard";
 
 export interface WeaveBlueprintListProps {
   readonly detail: WeaveRunProjection;
-  readonly openNodeId?: WeaveNodeId;
+  readonly openNodeId?: WeaveNodeId | undefined;
 }
 
 export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListProps) {
