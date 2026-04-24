@@ -136,6 +136,7 @@ function makeThreadShellSnapshot(params: {
         hasActionableProposedPlan: params.hasActionableProposedPlan ?? false,
       },
     ],
+    weaveRuns: [],
   };
 }
 

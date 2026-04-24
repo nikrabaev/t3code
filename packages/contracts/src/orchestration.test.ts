@@ -12,6 +12,9 @@ import {
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
   OrchestrationReadModel,
+  OrchestrationShellSnapshot,
+  OrchestrationShellStreamEvent,
+  OrchestrationWeaveRunShell,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
@@ -898,5 +901,81 @@ it.effect("decodes OrchestrationReadModel with empty weaveRuns", () =>
     assert.strictEqual(decoded.snapshotSequence, 0);
     assert.strictEqual(decoded.weaveRuns.size, 0);
     assert.strictEqual(decoded.updatedAt, now);
+  }),
+);
+
+const decodeOrchestrationWeaveRunShell = Schema.decodeUnknownEffect(OrchestrationWeaveRunShell);
+const decodeOrchestrationShellSnapshot = Schema.decodeUnknownEffect(OrchestrationShellSnapshot);
+const decodeOrchestrationShellStreamEvent = Schema.decodeUnknownEffect(
+  OrchestrationShellStreamEvent,
+);
+
+it.effect("OrchestrationWeaveRunShell decodes a summary round-trip", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-24T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationWeaveRunShell({
+      id: "run-1",
+      projectId: "proj-1",
+      title: "Ship login",
+      status: "reviewing",
+      pendingCount: 3,
+      readyCount: 0,
+      runningCount: 0,
+      verifiedCount: 0,
+      failedCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    assert.strictEqual(decoded.status, "reviewing");
+    assert.strictEqual(decoded.pendingCount, 3);
+  }),
+);
+
+it.effect("OrchestrationShellSnapshot decodes with empty weaveRuns", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-24T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationShellSnapshot({
+      snapshotSequence: 0,
+      projects: [],
+      threads: [],
+      weaveRuns: [],
+      updatedAt: now,
+    });
+    assert.strictEqual(decoded.weaveRuns.length, 0);
+  }),
+);
+
+it.effect("OrchestrationShellStreamEvent decodes weave-run-upserted", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-24T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationShellStreamEvent({
+      kind: "weave-run-upserted",
+      sequence: 1,
+      weaveRun: {
+        id: "run-1",
+        projectId: "proj-1",
+        title: "Ship",
+        status: "draft",
+        pendingCount: 0,
+        readyCount: 0,
+        runningCount: 0,
+        verifiedCount: 0,
+        failedCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    assert.strictEqual(decoded.kind, "weave-run-upserted");
+  }),
+);
+
+it.effect("OrchestrationShellStreamEvent decodes weave-run-removed", () =>
+  Effect.gen(function* () {
+    const decoded = yield* decodeOrchestrationShellStreamEvent({
+      kind: "weave-run-removed",
+      sequence: 2,
+      weaveRunId: "run-1",
+    });
+    assert.strictEqual(decoded.kind, "weave-run-removed");
   }),
 );

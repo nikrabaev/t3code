@@ -152,6 +152,7 @@ describe("OrchestrationEngine", () => {
               snapshotSequence: projectionSnapshot.snapshotSequence,
               projects: [],
               threads: [],
+              weaveRuns: [],
               updatedAt: projectionSnapshot.updatedAt,
             }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),

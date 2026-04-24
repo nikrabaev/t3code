@@ -1687,6 +1687,10 @@ function applyEnvironmentShellEvent(
       return writeThreadShellState(state, mapThreadShell(event.thread, environmentId));
     case "thread-removed":
       return removeThreadState(state, event.threadId);
+    case "weave-run-upserted":
+      return state;
+    case "weave-run-removed":
+      return state;
   }
 }
 

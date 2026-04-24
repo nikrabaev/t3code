@@ -471,6 +471,7 @@ const buildAppUnderTest = (options?: {
               snapshotSequence: 0,
               projects: [],
               threads: [],
+              weaveRuns: [],
               updatedAt: new Date(0).toISOString(),
             }),
           getProjectShellById: () => Effect.succeed(Option.none()),

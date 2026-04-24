@@ -41,6 +41,7 @@ import {
   WeavePhaseApprovedPayload,
   WeaveRunId,
   WeaveRunProjectionSchema,
+  WeaveRunStatus,
 } from "./weave.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
@@ -393,10 +394,30 @@ export const OrchestrationThreadShell = Schema.Struct({
 });
 export type OrchestrationThreadShell = typeof OrchestrationThreadShell.Type;
 
+// OrchestrationWeaveRunShell — summary of a weave run for sidebar rendering.
+// Full projection (including currentBlueprint + childThreads) is fetched
+// separately via `subscribeWeaveRun`. Summary is keyed by id and refreshed
+// whenever any weave.* event lands on that run.
+export const OrchestrationWeaveRunShell = Schema.Struct({
+  id: WeaveRunId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  status: WeaveRunStatus,
+  pendingCount: NonNegativeInt,
+  readyCount: NonNegativeInt,
+  runningCount: NonNegativeInt,
+  verifiedCount: NonNegativeInt,
+  failedCount: NonNegativeInt,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type OrchestrationWeaveRunShell = typeof OrchestrationWeaveRunShell.Type;
+
 export const OrchestrationShellSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
   projects: Schema.Array(OrchestrationProjectShell),
   threads: Schema.Array(OrchestrationThreadShell),
+  weaveRuns: Schema.Array(OrchestrationWeaveRunShell),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationShellSnapshot = typeof OrchestrationShellSnapshot.Type;
@@ -421,6 +442,16 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("thread-removed"),
     sequence: NonNegativeInt,
     threadId: ThreadId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("weave-run-upserted"),
+    sequence: NonNegativeInt,
+    weaveRun: OrchestrationWeaveRunShell,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("weave-run-removed"),
+    sequence: NonNegativeInt,
+    weaveRunId: WeaveRunId,
   }),
 ]);
 export type OrchestrationShellStreamEvent = typeof OrchestrationShellStreamEvent.Type;

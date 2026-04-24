@@ -1074,6 +1074,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
                   }),
                 ),
+              weaveRuns: [],
               updatedAt: updatedAt ?? new Date(0).toISOString(),
             };
 
