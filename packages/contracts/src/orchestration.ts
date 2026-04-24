@@ -814,6 +814,17 @@ export const OrchestrationAggregateKind = Schema.Literals(["project", "thread", 
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
 
+// AggregateRef — a discriminated pair of (aggregateKind, aggregateId) that
+// enforces the type correlation at the schema layer. EventBaseFields still
+// stores the two fields separately for backward-compat; at call sites that
+// need a narrow typed ref, use `aggregateRefOf(event)` from the server side.
+export const AggregateRef = Schema.Union([
+  Schema.Struct({ aggregateKind: Schema.Literal("project"), aggregateId: ProjectId }),
+  Schema.Struct({ aggregateKind: Schema.Literal("thread"), aggregateId: ThreadId }),
+  Schema.Struct({ aggregateKind: Schema.Literal("weave"), aggregateId: WeaveRunId }),
+]);
+export type AggregateRef = typeof AggregateRef.Type;
+
 export const ProjectCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,

@@ -3,6 +3,7 @@ import { it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
 import {
+  AggregateRef,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   OrchestrationAggregateKind,
@@ -22,6 +23,8 @@ import {
   ThreadTurnDiff,
   ThreadTurnStartRequestedPayload,
 } from "./orchestration.ts";
+import { ProjectId, ThreadId } from "./baseSchemas.ts";
+import { WeaveRunId } from "./weave.ts";
 
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
@@ -834,3 +837,45 @@ it.effect("decodes weave.phase-approved event via OrchestrationEvent", () =>
     assert.strictEqual(event.type, "weave.phase-approved");
   }),
 );
+
+// AggregateRef round-trip tests.
+// Brands are compile-time-only; at runtime all three variants are structurally
+// plain strings, so the union decoder accepts whichever literal "aggregateKind"
+// matches and does not re-validate the string brand on "aggregateId".
+
+it("decodes a project AggregateRef and narrows aggregateId to ProjectId", () => {
+  const decoded = Schema.decodeSync(AggregateRef)({
+    aggregateKind: "project",
+    aggregateId: ProjectId.make("project-1"),
+  });
+  assert.strictEqual(decoded.aggregateKind, "project");
+  assert.strictEqual(decoded.aggregateId, ProjectId.make("project-1"));
+});
+
+it("decodes a thread AggregateRef and narrows aggregateId to ThreadId", () => {
+  const decoded = Schema.decodeSync(AggregateRef)({
+    aggregateKind: "thread",
+    aggregateId: ThreadId.make("thread-1"),
+  });
+  assert.strictEqual(decoded.aggregateKind, "thread");
+  assert.strictEqual(decoded.aggregateId, ThreadId.make("thread-1"));
+});
+
+it("decodes a weave AggregateRef and narrows aggregateId to WeaveRunId", () => {
+  const decoded = Schema.decodeSync(AggregateRef)({
+    aggregateKind: "weave",
+    aggregateId: WeaveRunId.make("run-1"),
+  });
+  assert.strictEqual(decoded.aggregateKind, "weave");
+  assert.strictEqual(decoded.aggregateId, WeaveRunId.make("run-1"));
+});
+
+it("documents that AggregateRef brand enforcement is compile-time only (runtime accepts mismatched brands)", () => {
+  // Runtime Schema.decode accepts any structurally-string aggregateId because
+  // brands are erased. Kind-specific aggregateId runtime validation is deferred.
+  const decoded = Schema.decodeSync(AggregateRef)({
+    aggregateKind: "project",
+    aggregateId: ThreadId.make("thread-1"), // structurally a string at runtime
+  });
+  assert.strictEqual(decoded.aggregateKind, "project");
+});
