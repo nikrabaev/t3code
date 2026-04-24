@@ -1,14 +1,17 @@
 import {
   CommandId,
   WeaveRunId,
+  WeaveNodeId,
   ProjectId,
   WeavePhaseId,
   WeaveDecisionId,
   type WeaveDispatchableCommand,
+  type WeaveRunProjection,
 } from "@t3tools/contracts";
 import { Effect, Layer, ManagedRuntime, Queue, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
+import { buildWeaveRunShell } from "./ws.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -200,6 +203,60 @@ describe("ws.weave RPC integration", () => {
       } finally {
         await system.dispose();
       }
+    });
+  });
+
+  describe("buildWeaveRunShell unit", () => {
+    it("maps a WeaveRunProjection with mixed node statuses to correct shell counts", () => {
+      const runId = WeaveRunId.make("unit-test-run");
+      const projectId = ProjectId.make("unit-test-project");
+      const createdAt = "2026-04-24T00:00:00.000Z" as const;
+
+      const nodeStatuses = new Map([
+        [WeaveNodeId.make("n1"), "pending" as const],
+        [WeaveNodeId.make("n2"), "pending" as const],
+        [WeaveNodeId.make("n3"), "ready" as const],
+        [WeaveNodeId.make("n4"), "running" as const],
+        [WeaveNodeId.make("n5"), "verified" as const],
+        [WeaveNodeId.make("n6"), "failed" as const],
+        [WeaveNodeId.make("n7"), "paused" as const],
+      ]) as ReadonlyMap<
+        ReturnType<typeof WeaveNodeId.make>,
+        "pending" | "ready" | "running" | "verified" | "failed" | "paused"
+      >;
+
+      const projection: WeaveRunProjection = {
+        run: {
+          id: runId,
+          projectId,
+          title: "Unit Test Weave",
+          vision: "unit test vision",
+          status: "running",
+          concurrencyCap: 4,
+          createdAt,
+        },
+        currentBlueprint: null,
+        nodeStatuses,
+        openDecisions: new Set(),
+        autoDecisionLog: [],
+        phaseApprovals: new Map(),
+        childThreads: new Map(),
+      };
+
+      const shell = buildWeaveRunShell(projection);
+
+      expect(shell.id).toBe(runId);
+      expect(shell.projectId).toBe(projectId);
+      expect(shell.title).toBe("Unit Test Weave");
+      expect(shell.status).toBe("running");
+      expect(shell.createdAt).toBe(createdAt);
+      expect(shell.updatedAt).toBe(createdAt);
+      expect(shell.pendingCount).toBe(2);
+      expect(shell.readyCount).toBe(1);
+      expect(shell.runningCount).toBe(1);
+      expect(shell.verifiedCount).toBe(1);
+      expect(shell.failedCount).toBe(1);
+      // paused nodes are intentionally excluded from all summary counts
     });
   });
 

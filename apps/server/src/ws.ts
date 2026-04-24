@@ -132,6 +132,49 @@ function toAuthAccessStreamEvent(
   }
 }
 
+export function buildWeaveRunShell(projection: WeaveRunProjection): OrchestrationWeaveRunShell {
+  let pendingCount = 0;
+  let readyCount = 0;
+  let runningCount = 0;
+  let verifiedCount = 0;
+  let failedCount = 0;
+  for (const status of projection.nodeStatuses.values()) {
+    switch (status) {
+      case "pending":
+        pendingCount++;
+        break;
+      case "ready":
+        readyCount++;
+        break;
+      case "running":
+        runningCount++;
+        break;
+      case "verified":
+        verifiedCount++;
+        break;
+      case "failed":
+        failedCount++;
+        break;
+      case "paused":
+        // paused nodes are not counted in the summary counts (v0.1)
+        break;
+    }
+  }
+  return {
+    id: projection.run.id,
+    projectId: projection.run.projectId,
+    title: projection.run.title,
+    status: projection.run.status,
+    pendingCount,
+    readyCount,
+    runningCount,
+    verifiedCount,
+    failedCount,
+    createdAt: projection.run.createdAt,
+    updatedAt: projection.run.createdAt,
+  };
+}
+
 const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -252,49 +295,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
 
       const enrichOrchestrationEvents = (events: ReadonlyArray<OrchestrationEvent>) =>
         Effect.forEach(events, enrichProjectEvent, { concurrency: 4 });
-
-      function buildWeaveRunShell(projection: WeaveRunProjection): OrchestrationWeaveRunShell {
-        let pendingCount = 0;
-        let readyCount = 0;
-        let runningCount = 0;
-        let verifiedCount = 0;
-        let failedCount = 0;
-        for (const status of projection.nodeStatuses.values()) {
-          switch (status) {
-            case "pending":
-              pendingCount++;
-              break;
-            case "ready":
-              readyCount++;
-              break;
-            case "running":
-              runningCount++;
-              break;
-            case "verified":
-              verifiedCount++;
-              break;
-            case "failed":
-              failedCount++;
-              break;
-            case "paused":
-              // paused nodes are not counted in the summary counts (v0.1)
-              break;
-          }
-        }
-        return {
-          id: projection.run.id,
-          projectId: projection.run.projectId,
-          title: projection.run.title,
-          status: projection.run.status,
-          pendingCount,
-          readyCount,
-          runningCount,
-          verifiedCount,
-          failedCount,
-          createdAt: projection.run.createdAt,
-          updatedAt: projection.run.createdAt,
-        };
-      }
 
       const toShellStreamEvent = (
         event: OrchestrationEvent,
