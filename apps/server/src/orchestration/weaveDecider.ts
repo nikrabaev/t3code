@@ -173,11 +173,13 @@ export function decideWeaveCommand(input: {
       return Effect.gen(function* () {
         const run = yield* requireRun({ projection, command });
         yield* requireStatus({ projection: run, command, allowed: ["running"] });
+        // v0.1 shortcut: scheduler skips the explicit pending→ready transition.
+        // See docs/superpowers/followups/2026-04-24-reintroduce-weave-node-ready-transition.md
         yield* requireNodeStatus({
           projection: run,
           command,
           nodeId: command.nodeId,
-          allowed: ["ready"],
+          allowed: ["pending", "ready"],
         });
         const node = yield* requireNode({ projection: run, command, nodeId: command.nodeId });
         yield* requireAncestorsVerified({ projection: run, command, node });

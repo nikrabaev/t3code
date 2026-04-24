@@ -378,9 +378,35 @@ describe("decideWeaveCommand — weave.node.dispatch", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects dispatch when node is not in ready status", async () => {
+  // v0.1 shortcut: scheduler dispatches nodes in "pending" status, skipping the
+  // explicit pending→ready transition. The decider now accepts both "pending" and
+  // "ready". See docs/superpowers/followups/2026-04-24-reintroduce-weave-node-ready-transition.md
+  it("accepts dispatch when node is in pending status (v0.1 shortcut: pending→ready skipped)", async () => {
     const p = buildRunningProjection({
       nodes: [{ id: "node-1", status: "pending" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.dispatch",
+          commandId: CommandId.make("cmd-d"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          childThreadId: ThreadId.make("thread-1"),
+          worktreePath: "/tmp/wt",
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-dispatched");
+  });
+
+  it("rejects dispatch when node is in a non-dispatchable status (e.g. running)", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "running" }],
       phases: [{ id: "phase-1", ordinal: 0 }],
     });
     await expect(
@@ -398,7 +424,7 @@ describe("decideWeaveCommand — weave.node.dispatch", () => {
           },
         }),
       ),
-    ).rejects.toThrow("status is 'pending'");
+    ).rejects.toThrow("status is 'running'");
   });
 
   it("rejects dispatch when an ancestor is not verified", async () => {
