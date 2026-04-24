@@ -64,6 +64,20 @@ export function deriveOrchestrationBatchEffects(
         break;
       }
 
+      // Weave events — no batch effects in v0.1; routed explicitly so the
+      // switch remains exhaustive when the default is removed in a future task.
+      case "weave.created":
+      case "weave.blueprint-compiled":
+      case "weave.blueprint-approved":
+      case "weave.node-dispatched":
+      case "weave.node-verified":
+      case "weave.node-failed":
+      case "weave.decision-resolved":
+      case "weave.phase-approved":
+      case "weave.exited": {
+        break;
+      }
+
       default: {
         break;
       }

@@ -172,6 +172,8 @@ function makeState(thread: Thread): AppState {
       ) as EnvironmentState["turnDiffSummaryByThreadId"][ThreadId],
     },
     sidebarThreadSummaryById: {},
+    weaveRunsById: {},
+    weaveRunDetailById: {},
     bootstrapComplete: true,
   };
   return withActiveEnvironmentState(environmentState, {
@@ -197,6 +199,8 @@ function makeEmptyState(overrides: Partial<AppState & EnvironmentState> = {}): A
     turnDiffIdsByThreadId: {},
     turnDiffSummaryByThreadId: {},
     sidebarThreadSummaryById: {},
+    weaveRunsById: {},
+    weaveRunDetailById: {},
     bootstrapComplete: true,
   };
   return withActiveEnvironmentState(environmentState, overrides);

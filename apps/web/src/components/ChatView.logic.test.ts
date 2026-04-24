@@ -338,6 +338,8 @@ function setStoreThreads(threads: ReadonlyArray<ReturnType<typeof makeThread>>) 
       ]),
     ),
     sidebarThreadSummaryById: {},
+    weaveRunsById: {},
+    weaveRunDetailById: {},
     bootstrapComplete: true,
   };
   useStore.setState({

@@ -95,6 +95,8 @@ function makeEmptyEnvironmentState(): EnvironmentState {
     turnDiffIdsByThreadId: {},
     turnDiffSummaryByThreadId: {},
     sidebarThreadSummaryById: {},
+    weaveRunsById: {},
+    weaveRunDetailById: {},
     bootstrapComplete: true,
   };
 }

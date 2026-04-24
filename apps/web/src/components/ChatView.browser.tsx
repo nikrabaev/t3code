@@ -470,6 +470,7 @@ function toShellSnapshot(snapshot: OrchestrationReadModel) {
       updatedAt: project.updatedAt,
     })),
     threads: snapshot.threads.map(toShellThread),
+    weaveRuns: [],
     updatedAt: snapshot.updatedAt,
   };
 }

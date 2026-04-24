@@ -211,6 +211,7 @@ function toShellSnapshot(snapshot: OrchestrationReadModel) {
       hasPendingUserInput: false,
       hasActionableProposedPlan: false,
     })),
+    weaveRuns: [],
     updatedAt: snapshot.updatedAt,
   };
 }

@@ -14,9 +14,11 @@ import type {
   OrchestrationThread,
   OrchestrationThreadShell,
   OrchestrationThreadActivity,
+  OrchestrationWeaveRunShell,
   ProjectId,
   ScopedProjectRef,
   ScopedThreadRef,
+  WeaveRunId,
   WeaveRunProjection,
 } from "@t3tools/contracts";
 import { ProviderKind } from "@t3tools/contracts";
@@ -87,6 +89,13 @@ export interface EnvironmentState {
   // ---------------------------------------------------------------------------
   sidebarThreadSummaryById: Record<ThreadId, SidebarThreadSummary>;
 
+  // ---------------------------------------------------------------------------
+  // Weave run state — written by shell stream (weaveRunsById) and per-run
+  // detail stream (weaveRunDetailById).
+  // ---------------------------------------------------------------------------
+  weaveRunsById: Record<WeaveRunId, OrchestrationWeaveRunShell>;
+  weaveRunDetailById: Record<WeaveRunId, WeaveRunProjection>;
+
   bootstrapComplete: boolean;
 }
 
@@ -112,6 +121,8 @@ const initialEnvironmentState: EnvironmentState = {
   turnDiffIdsByThreadId: {},
   turnDiffSummaryByThreadId: {},
   sidebarThreadSummaryById: {},
+  weaveRunsById: {},
+  weaveRunDetailById: {},
   bootstrapComplete: false,
 };
 
@@ -1077,6 +1088,10 @@ function syncEnvironmentShellSnapshot(
 ): EnvironmentState {
   const nextProjects = snapshot.projects.map((project) => mapProject(project, environmentId));
   const nextThreadIds = new Set(snapshot.threads.map((thread) => thread.id));
+  const nextWeaveRunsById: Record<WeaveRunId, OrchestrationWeaveRunShell> = {};
+  for (const weaveRun of snapshot.weaveRuns) {
+    nextWeaveRunsById[weaveRun.id] = weaveRun;
+  }
   let nextState: EnvironmentState = {
     ...state,
     ...buildProjectState(nextProjects),
@@ -1100,6 +1115,7 @@ function syncEnvironmentShellSnapshot(
       state.turnDiffSummaryByThreadId,
       nextThreadIds,
     ),
+    weaveRunsById: nextWeaveRunsById,
     bootstrapComplete: true,
   };
 
@@ -1138,6 +1154,148 @@ export function syncServerThreadDetail(
     environmentId,
     writeThreadState(environmentState, mapThread(thread, environmentId), previousThread),
   );
+}
+
+export function syncServerWeaveRunDetail(
+  state: AppState,
+  weaveRun: WeaveRunProjection,
+  environmentId: EnvironmentId,
+): AppState {
+  const environmentState = getStoredEnvironmentState(state, environmentId);
+  return commitEnvironmentState(state, environmentId, {
+    ...environmentState,
+    weaveRunDetailById: {
+      ...environmentState.weaveRunDetailById,
+      [weaveRun.run.id]: weaveRun,
+    },
+  });
+}
+
+// Per-event patching for the weave run detail projection.
+// Strategy: per-event field patching (v0.1 shortcut).
+// The server-side projectWeaveEvent returns Effect.Effect which is not
+// suitable for client use without pulling in the Effect runtime.  Each
+// weave event type is handled inline here, mirroring the server projector
+// logic but without the Effect wrapper.
+function applyWeaveEventToDetail(
+  detail: WeaveRunProjection,
+  event: OrchestrationEvent,
+): WeaveRunProjection {
+  switch (event.type) {
+    case "weave.created":
+      // Snapshot sync is the authoritative source; created event only
+      // materialises the projection if it is absent.
+      return detail;
+    case "weave.blueprint-compiled": {
+      const { payload } = event;
+      const nextNodeStatuses = new Map(detail.nodeStatuses);
+      for (const node of payload.blueprint.nodes) {
+        nextNodeStatuses.set(node.id, "pending");
+      }
+      const nextOpenDecisions = new Set(detail.openDecisions);
+      for (const decision of payload.blueprint.decisions) {
+        if (decision.resolution === undefined) {
+          nextOpenDecisions.add(decision.id);
+        }
+      }
+      return {
+        ...detail,
+        run: { ...detail.run, status: "reviewing" },
+        currentBlueprint: payload.blueprint,
+        nodeStatuses: nextNodeStatuses,
+        openDecisions: nextOpenDecisions,
+      };
+    }
+    case "weave.blueprint-approved": {
+      const { payload } = event;
+      return {
+        ...detail,
+        run: {
+          ...detail.run,
+          status: "running",
+          currentBlueprintVersion: payload.version,
+          concurrencyCap: payload.concurrencyCap,
+        },
+      };
+    }
+    case "weave.node-dispatched": {
+      const { payload } = event;
+      const nextNodeStatuses = new Map(detail.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "running");
+      const nextChildThreads = new Map(detail.childThreads);
+      nextChildThreads.set(payload.nodeId, {
+        threadId: payload.childThreadId,
+        worktreePath: payload.worktreePath,
+      });
+      return { ...detail, nodeStatuses: nextNodeStatuses, childThreads: nextChildThreads };
+    }
+    case "weave.node-verified": {
+      const { payload } = event;
+      const nextNodeStatuses = new Map(detail.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "verified");
+      return { ...detail, nodeStatuses: nextNodeStatuses };
+    }
+    case "weave.node-failed": {
+      const { payload } = event;
+      const nextNodeStatuses = new Map(detail.nodeStatuses);
+      nextNodeStatuses.set(payload.nodeId, "failed");
+      return { ...detail, nodeStatuses: nextNodeStatuses };
+    }
+    case "weave.decision-resolved": {
+      const { payload } = event;
+      const nextOpenDecisions = new Set(detail.openDecisions);
+      nextOpenDecisions.delete(payload.decisionId);
+      const nextAutoDecisionLog = payload.byUser
+        ? detail.autoDecisionLog
+        : [
+            ...detail.autoDecisionLog,
+            { decisionId: payload.decisionId, answer: payload.answer, at: payload.occurredAt },
+          ];
+      return { ...detail, openDecisions: nextOpenDecisions, autoDecisionLog: nextAutoDecisionLog };
+    }
+    case "weave.phase-approved": {
+      const { payload } = event;
+      const nextPhaseApprovals = new Map(detail.phaseApprovals);
+      nextPhaseApprovals.set(payload.phaseId, payload.approval);
+      return { ...detail, phaseApprovals: nextPhaseApprovals };
+    }
+    case "weave.exited": {
+      const { payload } = event;
+      return { ...detail, run: { ...detail.run, status: payload.reason } };
+    }
+    default:
+      return detail;
+  }
+}
+
+export function applyEnvironmentWeaveRunDetailEvent(
+  state: AppState,
+  event: OrchestrationEvent,
+  environmentId: EnvironmentId,
+): AppState {
+  if (!event.type.startsWith("weave.")) {
+    return state;
+  }
+  const environmentState = getStoredEnvironmentState(state, environmentId);
+  // Extract runId from the weave event payload — all weave payloads carry weaveRunId.
+  const weaveEvent = event as Extract<OrchestrationEvent, { type: `weave.${string}` }>;
+  const runId = weaveEvent.payload.weaveRunId;
+  const existing = environmentState.weaveRunDetailById[runId];
+  if (!existing) {
+    // Detail not yet loaded — ignore; snapshot sync will populate on reconnect.
+    return state;
+  }
+  const next = applyWeaveEventToDetail(existing, event);
+  if (next === existing) {
+    return state;
+  }
+  return commitEnvironmentState(state, environmentId, {
+    ...environmentState,
+    weaveRunDetailById: {
+      ...environmentState.weaveRunDetailById,
+      [runId]: next,
+    },
+  });
 }
 
 function applyEnvironmentOrchestrationEvent(
@@ -1689,9 +1847,14 @@ function applyEnvironmentShellEvent(
     case "thread-removed":
       return removeThreadState(state, event.threadId);
     case "weave-run-upserted":
-      return state;
-    case "weave-run-removed":
-      return state;
+      return {
+        ...state,
+        weaveRunsById: { ...state.weaveRunsById, [event.weaveRun.id]: event.weaveRun },
+      };
+    case "weave-run-removed": {
+      const { [event.weaveRunId]: _, ...rest } = state.weaveRunsById;
+      return { ...state, weaveRunsById: rest };
+    }
   }
 }
 
@@ -1935,9 +2098,7 @@ interface AppStore extends AppState {
     environmentId: EnvironmentId,
   ) => void;
   syncServerThreadDetail: (thread: OrchestrationThread, environmentId: EnvironmentId) => void;
-  // Task 5 stub: replaced with a real reducer when the weave run store slice lands.
   syncServerWeaveRunDetail: (weaveRun: WeaveRunProjection, environmentId: EnvironmentId) => void;
-  // Task 5 stub: replaced with a real reducer when the weave run store slice lands.
   applyEnvironmentWeaveRunDetailEvent: (
     event: OrchestrationEvent,
     environmentId: EnvironmentId,
@@ -1964,10 +2125,10 @@ export const useStore = create<AppStore>((set) => ({
     set((state) => syncServerShellSnapshot(state, snapshot, environmentId)),
   syncServerThreadDetail: (thread, environmentId) =>
     set((state) => syncServerThreadDetail(state, thread, environmentId)),
-  // Task 5 stub — no-op until the weave run store slice is implemented.
-  syncServerWeaveRunDetail: (_weaveRun, _environmentId) => undefined,
-  // Task 5 stub — no-op until the weave run store slice is implemented.
-  applyEnvironmentWeaveRunDetailEvent: (_event, _environmentId) => undefined,
+  syncServerWeaveRunDetail: (weaveRun, environmentId) =>
+    set((state) => syncServerWeaveRunDetail(state, weaveRun, environmentId)),
+  applyEnvironmentWeaveRunDetailEvent: (event, environmentId) =>
+    set((state) => applyEnvironmentWeaveRunDetailEvent(state, event, environmentId)),
   applyOrchestrationEvent: (event, environmentId) =>
     set((state) => applyOrchestrationEvent(state, event, environmentId)),
   applyOrchestrationEvents: (events, environmentId) =>
