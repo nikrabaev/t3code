@@ -429,9 +429,10 @@ function isTerminalWeaveRunDetailSubscription(entry: WeaveRunDetailSubscriptionE
   // shell stream (Tasks 6+).  If the run is not yet known, treat it as
   // non-terminal so the subscription stays alive.
   const state = useStore.getState();
+  // TODO(Task 5): replace `as unknown as` cast once weaveRunsById is typed in AppStore.
   const shellSnapshot = (
-    state as unknown as { weaveRunShellById?: Record<string, { status: WeaveRunStatus }> }
-  ).weaveRunShellById;
+    state as unknown as { weaveRunsById?: Record<string, { status: WeaveRunStatus }> }
+  ).weaveRunsById;
   if (!shellSnapshot) {
     return false;
   }
