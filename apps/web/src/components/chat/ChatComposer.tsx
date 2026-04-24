@@ -740,6 +740,13 @@ export const ChatComposer = memo(
             label: "/default",
             description: "Switch this thread back to normal build mode",
           },
+          {
+            id: "slash:weave",
+            type: "slash-command",
+            command: "weave",
+            label: "/weave",
+            description: "Compile a Blueprint from this chat and run it",
+          },
         ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
         const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
           (command) => ({

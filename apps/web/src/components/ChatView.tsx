@@ -19,6 +19,7 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
   TerminalOpenInput,
+  WeaveRunId,
 } from "@t3tools/contracts";
 import {
   parseScopedThreadKey,
@@ -68,6 +69,7 @@ import {
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import {
+  type AppState,
   selectProjectsAcrossEnvironments,
   selectThreadsAcrossEnvironments,
   useStore,
@@ -175,6 +177,9 @@ import {
 import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
 import { retainThreadDetailSubscription } from "../environments/runtime/service";
 import { RightPanelSheet } from "./RightPanelSheet";
+import { dispatchWeaveCommand } from "../weave/dispatchWeaveCommand";
+import { buildThreadMarkdownSnapshot, deriveTitleFromSnapshot } from "../weave/weaveThreadSnapshot";
+import { WeaveCreatedMarker } from "./weave/WeaveCreatedMarker";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -844,6 +849,22 @@ export default function ChatView(props: ChatViewProps) {
     }
     return retainThreadDetailSubscription(environmentId, threadId);
   }, [environmentId, routeKind, threadId]);
+
+  // Weave runs whose parentThreadId matches the current thread — used to
+  // render WeaveCreatedMarker banners at the bottom of the thread.
+  // Option (c) from the plan: no per-message anchoring; banner at bottom only.
+  // parentThreadId lives on the detail projection's run.parentThreadId.
+  const weaveRunsForThread = useStore(
+    useMemo(() => {
+      return (state: AppState) => {
+        const envState = state.environmentStateById[environmentId];
+        if (!envState || !threadId) return [] as Array<{ id: WeaveRunId; title: string }>;
+        return Object.values(envState.weaveRunDetailById)
+          .filter((detail) => detail.run.parentThreadId === threadId)
+          .map((detail) => ({ id: detail.run.id, title: detail.run.title }));
+      };
+    }, [environmentId, threadId]),
+  );
 
   // Compute the list of environments this logical project spans, used to
   // drive the environment picker in BranchToolbar.
@@ -2415,6 +2436,39 @@ export default function ChatView(props: ChatViewProps) {
       composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
+    if (standaloneSlashCommand === "weave") {
+      // Build a snapshot of the current thread and dispatch weave.create, then
+      // navigate to the new weave run view.  Clear the composer afterwards.
+      const snapshotMessages = activeThread.messages;
+      const snapshotContent = buildThreadMarkdownSnapshot(snapshotMessages);
+      const title = deriveTitleFromSnapshot(snapshotContent) || activeThread.title || "Weave run";
+      const weaveRunId = WeaveRunId.make(randomUUID());
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      try {
+        await dispatchWeaveCommand(environmentId, {
+          type: "weave.create",
+          commandId: newCommandId(),
+          weaveRunId,
+          projectId: activeThread.projectId,
+          title: title as typeof title & string,
+          vision: snapshotContent,
+          parentThreadId: activeThread.id,
+          snapshotContent: snapshotContent || undefined,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setThreadError(activeThread.id, `Failed to create Weave run: ${message}`);
+        return;
+      }
+      await navigate({
+        to: "/$environmentId/$weaveRunId",
+        params: { environmentId, weaveRunId },
+      });
+      return;
+    }
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -3301,6 +3355,22 @@ export default function ChatView(props: ChatViewProps) {
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
             />
+
+            {/* Weave run markers — rendered at the bottom of the thread for
+                every weave run compiled from this thread. Option (c) per plan:
+                no per-message anchor in v0.1; anchor-to-message deferred to v0.3. */}
+            {weaveRunsForThread.length > 0 && (
+              <div>
+                {weaveRunsForThread.map((run) => (
+                  <WeaveCreatedMarker
+                    key={run.id}
+                    environmentId={environmentId}
+                    weaveRunId={run.id}
+                    title={run.title}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}
             {showScrollToBottom && (
