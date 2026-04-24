@@ -165,7 +165,7 @@ const make = Effect.gen(function* () {
   const start: WeaveContractConformerShape["start"] = () =>
     Effect.forkScoped(
       Stream.runForEach(
-        receiptBus.streamEventsForTest.pipe(
+        receiptBus.streamEvents.pipe(
           Stream.filter(
             (e): e is TurnProcessingQuiescedReceipt => e.type === "turn.processing.quiesced",
           ),

@@ -1,16 +1,12 @@
 /**
  * RuntimeReceiptBus - Internal checkpoint-reactor synchronization receipts.
  *
- * This service exists to expose short-lived orchestration milestones that are
- * useful in tests and harnesses but are not part of the production runtime
- * event model. `CheckpointReactor` publishes receipts such as baseline capture,
- * diff finalization, and turn-processing quiescence so integration tests can
- * wait for those exact points without inferring them indirectly from persisted
- * state.
- *
- * Production code should only call `publish`. Test code may subscribe via
- * `streamEventsForTest`, which is intentionally named to make the intended
- * usage explicit.
+ * This service exposes short-lived orchestration milestones published by
+ * `CheckpointReactor` (baseline capture, diff finalization, turn-processing
+ * quiescence). Consumers include the `WeaveContractConformer`, which awaits
+ * `turn.processing.quiesced` to promote node phases, and integration tests
+ * that need to wait for those exact points without inferring them indirectly
+ * from persisted state.
  *
  * @module RuntimeReceiptBus
  */
@@ -56,7 +52,7 @@ export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Typ
 
 export interface RuntimeReceiptBusShape {
   readonly publish: (receipt: OrchestrationRuntimeReceipt) => Effect.Effect<void>;
-  readonly streamEventsForTest: Stream.Stream<OrchestrationRuntimeReceipt>;
+  readonly streamEvents: Stream.Stream<OrchestrationRuntimeReceipt>;
 }
 
 export class RuntimeReceiptBus extends Context.Service<RuntimeReceiptBus, RuntimeReceiptBusShape>()(

@@ -423,7 +423,7 @@ export const makeOrchestrationIntegrationHarness = (
       runtime.runPromise(reactor.start().pipe(Scope.provide(scope))),
     ).pipe(Effect.orDie);
     const receiptHistory = yield* Ref.make<ReadonlyArray<OrchestrationRuntimeReceipt>>([]);
-    yield* Stream.runForEach(runtimeReceiptBus.streamEventsForTest, (receipt) =>
+    yield* Stream.runForEach(runtimeReceiptBus.streamEvents, (receipt) =>
       Ref.update(receiptHistory, (history) => [...history, receipt]).pipe(Effect.asVoid),
     ).pipe(Effect.forkIn(scope));
     yield* Effect.sleep(10);
