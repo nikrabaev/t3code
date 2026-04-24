@@ -16,6 +16,7 @@ import {
   requireThreadNotArchived,
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
+import { decideWeaveCommand } from "./weaveDecider.ts";
 
 const nowIso = () => new Date().toISOString();
 const defaultMetadata: Omit<OrchestrationEvent, "sequence" | "type" | "payload"> = {
@@ -741,7 +742,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
-    // Slice 1 stub: weave dispatch not wired yet (ships in Slice 3).
     case "weave.create":
     case "weave.blueprint.approve":
     case "weave.phase.approve":
@@ -751,10 +751,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "weave.node.dispatch":
     case "weave.node.verified":
     case "weave.node.failed": {
-      return yield* new OrchestrationCommandInvariantError({
-        commandType: command.type,
-        detail: `Weave command type '${command.type}' is not handled in Slice 1; real dispatch ships in Slice 3.`,
-      });
+      const runId = command.weaveRunId;
+      const projection = readModel.weaveRuns.get(runId) ?? null;
+      const plannedEvents = yield* decideWeaveCommand({ projection, command });
+      return plannedEvents;
     }
 
     default: {
