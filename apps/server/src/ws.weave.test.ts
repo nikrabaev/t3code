@@ -17,6 +17,8 @@ import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/
 import { RepositoryIdentityResolverLive } from "./project/Layers/RepositoryIdentityResolver.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { WeaveEngineLive } from "./orchestration/Layers/WeaveEngine.ts";
+import { WeaveEngineService } from "./orchestration/Services/WeaveEngine.ts";
 import { ServerConfig } from "./config.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
@@ -38,10 +40,14 @@ async function createOrchestrationSystem() {
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
-  const runtime = ManagedRuntime.make(orchestrationLayer);
+  const weaveEngineLayer = WeaveEngineLive.pipe(Layer.provide(orchestrationLayer));
+  const combinedLayer = Layer.provideMerge(weaveEngineLayer, orchestrationLayer);
+  const runtime = ManagedRuntime.make(combinedLayer);
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+  const weaveEngine = await runtime.runPromise(Effect.service(WeaveEngineService));
   return {
     engine,
+    weaveEngine,
     run: <A, E>(effect: Effect.Effect<A, E>) => runtime.runPromise(effect),
     dispose: () => runtime.dispose(),
   };
@@ -103,6 +109,11 @@ describe("ws.weave RPC integration", () => {
         expect(result.sequence).toBeDefined();
         expect(typeof result.sequence).toBe("number");
         expect(result.sequence).toBeGreaterThan(0);
+
+        // Verify that the weave projection is created with status = "draft"
+        const projection = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
+        expect(projection).not.toBeNull();
+        expect(projection?.run.status).toBe("draft");
       } finally {
         await system.dispose();
       }
