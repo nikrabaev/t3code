@@ -6,11 +6,13 @@ import type {
   WeaveRunId,
 } from "@t3tools/contracts";
 
-// aggregateRefOf narrows an OrchestrationEvent's (aggregateKind, aggregateId)
+// aggregateRefOf narrows an event or command envelope's (aggregateKind, aggregateId)
 // plain-union pair into a discriminated AggregateRef. This is the single place
 // the narrowing cast lives; call sites that were using `as ProjectId | ThreadId`
 // should use `aggregateRefOf(event).aggregateId` instead.
-export function aggregateRefOf(event: OrchestrationEvent): AggregateRef {
+export function aggregateRefOf(
+  event: Pick<OrchestrationEvent, "aggregateKind" | "aggregateId">,
+): AggregateRef {
   switch (event.aggregateKind) {
     case "project":
       return { aggregateKind: "project", aggregateId: event.aggregateId as ProjectId };

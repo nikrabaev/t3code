@@ -184,7 +184,7 @@ const makeEventStore = Effect.gen(function* () {
     return appendEventRow({
       eventId: event.eventId,
       aggregateKind: event.aggregateKind,
-      streamId: aggregateRefOf(event as OrchestrationEvent).aggregateId,
+      streamId: aggregateRefOf(event).aggregateId,
       type: event.type,
       causationEventId: event.causationEventId,
       correlationId: event.correlationId,
