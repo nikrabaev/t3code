@@ -5,6 +5,9 @@ import { CheckpointReactor } from "../Services/CheckpointReactor.ts";
 import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
+import { WeaveContractConformer } from "../Services/WeaveContractConformer.ts";
+import { WeavePlanner } from "../Services/WeavePlanner.ts";
+import { WeaveScheduler } from "../Services/WeaveScheduler.ts";
 import { OrchestrationReactor } from "../Services/OrchestrationReactor.ts";
 import { makeOrchestrationReactor } from "./OrchestrationReactor.ts";
 
@@ -18,7 +21,7 @@ describe("OrchestrationReactor", () => {
     runtime = null;
   });
 
-  it("starts provider ingestion, provider command, checkpoint, and thread deletion reactors", async () => {
+  it("starts provider ingestion, provider command, checkpoint, thread deletion, weave planner, weave scheduler, and weave contract conformer reactors", async () => {
     const started: string[] = [];
 
     runtime = ManagedRuntime.make(
@@ -59,6 +62,33 @@ describe("OrchestrationReactor", () => {
             drain: Effect.void,
           }),
         ),
+        Layer.provideMerge(
+          Layer.succeed(WeavePlanner, {
+            start: () => {
+              started.push("weave-planner");
+              return Effect.void;
+            },
+            drain: Effect.void,
+          }),
+        ),
+        Layer.provideMerge(
+          Layer.succeed(WeaveScheduler, {
+            start: () => {
+              started.push("weave-scheduler");
+              return Effect.void;
+            },
+            drain: Effect.void,
+          }),
+        ),
+        Layer.provideMerge(
+          Layer.succeed(WeaveContractConformer, {
+            start: () => {
+              started.push("weave-contract-conformer");
+              return Effect.void;
+            },
+            drain: Effect.void,
+          }),
+        ),
       ),
     );
 
@@ -71,6 +101,9 @@ describe("OrchestrationReactor", () => {
       "provider-command-reactor",
       "checkpoint-reactor",
       "thread-deletion-reactor",
+      "weave-planner",
+      "weave-scheduler",
+      "weave-contract-conformer",
     ]);
 
     await Effect.runPromise(Scope.close(scope, Exit.void));

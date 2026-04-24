@@ -2,9 +2,17 @@ import { Layer } from "effect";
 
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
+import { GitCoreLive } from "../git/Layers/GitCore.ts";
 import { OrchestrationEngineLive } from "./Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./Layers/ProjectionSnapshotQuery.ts";
+import { PlannerDriverLive } from "./Layers/PlannerDriver.ts";
+import { ProcessRunnerLive } from "./Layers/ProcessRunner.ts";
+import { RuntimeReceiptBusLive } from "./Layers/RuntimeReceiptBus.ts";
+import { WeaveContractConformerLive } from "./Layers/WeaveContractConformer.ts";
+import { WeaveEngineLive } from "./Layers/WeaveEngine.ts";
+import { WeavePlannerLive } from "./Layers/WeavePlanner.ts";
+import { WeaveSchedulerLive } from "./Layers/WeaveScheduler.ts";
 
 export const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationEventStoreLive,
@@ -21,7 +29,38 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationProjectionPipelineLayerLive,
 );
 
+const OrchestrationEngineFull = OrchestrationEngineLive.pipe(
+  Layer.provide(OrchestrationInfrastructureLayerLive),
+);
+
+const WeaveEngineFull = WeaveEngineLive.pipe(Layer.provide(OrchestrationEngineFull));
+
+const WeavePlannerFull = WeavePlannerLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(PlannerDriverLive),
+);
+
+const WeaveSchedulerFull = WeaveSchedulerLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(OrchestrationEngineFull),
+  Layer.provide(GitCoreLive),
+);
+
+const WeaveContractConformerFull = WeaveContractConformerLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(OrchestrationEngineFull),
+  Layer.provide(RuntimeReceiptBusLive),
+  Layer.provide(ProcessRunnerLive),
+);
+
 export const OrchestrationLayerLive = Layer.mergeAll(
   OrchestrationInfrastructureLayerLive,
-  OrchestrationEngineLive.pipe(Layer.provide(OrchestrationInfrastructureLayerLive)),
+  OrchestrationEngineFull,
+  WeaveEngineFull,
+  WeavePlannerFull,
+  WeaveSchedulerFull,
+  ProcessRunnerLive,
+  WeaveContractConformerFull,
+  RuntimeReceiptBusLive,
+  GitCoreLive,
 );
