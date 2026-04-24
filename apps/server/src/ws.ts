@@ -10,6 +10,7 @@ import {
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
   type OrchestrationShellStreamEvent,
+  type OrchestrationWeaveRunShell,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
   OrchestrationGetTurnDiffError,
@@ -22,6 +23,8 @@ import {
   type TerminalEvent,
   WS_METHODS,
   WsRpcGroup,
+  WeaveRunId,
+  type WeaveRunProjection,
 } from "@t3tools/contracts";
 import { clamp } from "effect/Number";
 import { HttpRouter, HttpServerRequest } from "effect/unstable/http";
@@ -250,6 +253,49 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const enrichOrchestrationEvents = (events: ReadonlyArray<OrchestrationEvent>) =>
         Effect.forEach(events, enrichProjectEvent, { concurrency: 4 });
 
+      function buildWeaveRunShell(projection: WeaveRunProjection): OrchestrationWeaveRunShell {
+        let pendingCount = 0;
+        let readyCount = 0;
+        let runningCount = 0;
+        let verifiedCount = 0;
+        let failedCount = 0;
+        for (const status of projection.nodeStatuses.values()) {
+          switch (status) {
+            case "pending":
+              pendingCount++;
+              break;
+            case "ready":
+              readyCount++;
+              break;
+            case "running":
+              runningCount++;
+              break;
+            case "verified":
+              verifiedCount++;
+              break;
+            case "failed":
+              failedCount++;
+              break;
+            case "paused":
+              // paused nodes are not counted in the summary counts (v0.1)
+              break;
+          }
+        }
+        return {
+          id: projection.run.id,
+          projectId: projection.run.projectId,
+          title: projection.run.title,
+          status: projection.run.status,
+          pendingCount,
+          readyCount,
+          runningCount,
+          verifiedCount,
+          failedCount,
+          createdAt: projection.run.createdAt,
+          updatedAt: projection.run.createdAt,
+        };
+      }
+
       const toShellStreamEvent = (
         event: OrchestrationEvent,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> => {
@@ -283,6 +329,20 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               }),
             );
           default:
+            if (event.aggregateKind === "weave") {
+              return orchestrationEngine.getReadModel().pipe(
+                Effect.map((readModel) => {
+                  const runId = WeaveRunId.make(event.aggregateId);
+                  const projection = readModel.weaveRuns.get(runId);
+                  if (projection === undefined) return Option.none<OrchestrationShellStreamEvent>();
+                  return Option.some({
+                    kind: "weave-run-upserted" as const,
+                    sequence: event.sequence,
+                    weaveRun: buildWeaveRunShell(projection),
+                  });
+                }),
+              );
+            }
             if (event.aggregateKind !== "thread") {
               return Effect.succeed(Option.none());
             }
@@ -668,15 +728,21 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeShell,
             Effect.gen(function* () {
-              const snapshot = yield* projectionSnapshotQuery.getShellSnapshot().pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new OrchestrationGetSnapshotError({
-                      message: "Failed to load orchestration shell snapshot",
-                      cause,
-                    }),
+              const [shellSnapshot, readModel] = yield* Effect.all([
+                projectionSnapshotQuery.getShellSnapshot().pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new OrchestrationGetSnapshotError({
+                        message: "Failed to load orchestration shell snapshot",
+                        cause,
+                      }),
+                  ),
                 ),
-              );
+                orchestrationEngine.getReadModel(),
+              ]);
+
+              const weaveRuns = Array.from(readModel.weaveRuns.values()).map(buildWeaveRunShell);
+              const snapshot = { ...shellSnapshot, weaveRuns };
 
               const liveStream = orchestrationEngine.streamDomainEvents.pipe(
                 Stream.mapEffect(toShellStreamEvent),

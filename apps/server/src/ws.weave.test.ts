@@ -202,4 +202,52 @@ describe("ws.weave RPC integration", () => {
       }
     });
   });
+
+  describe("shell snapshot includes weave run summaries", () => {
+    it("engine read model includes weave run with status=draft after weave.create", async () => {
+      // This verifies the data that buildWeaveRunShell (in ws.ts subscribeShell) consumes.
+      // The shell snapshot augments the SQL-backed snapshot with in-memory weaveRuns from
+      // orchestrationEngine.getReadModel().weaveRuns — this test asserts that map has the
+      // correct projection after a weave.create dispatch.
+      const system = await createOrchestrationSystem();
+      try {
+        const weaveRunId = WeaveRunId.make("shell-snapshot-test-run");
+        const projectId = ProjectId.make("shell-snapshot-test-project");
+        const createdAt = now();
+
+        // Before create: weaveRuns map is empty.
+        const before = await system.run(system.engine.getReadModel());
+        expect(before.weaveRuns.size).toBe(0);
+
+        // Dispatch weave.create.
+        await system.run(
+          system.engine.dispatch({
+            type: "weave.create",
+            commandId: CommandId.make("shell-snapshot-cmd"),
+            weaveRunId,
+            projectId,
+            title: "Shell Snapshot Test Weave",
+            vision: "shell snapshot test vision",
+            createdAt,
+          }),
+        );
+
+        // After create: weaveRuns map has one entry with the correct fields.
+        const after = await system.run(system.engine.getReadModel());
+        expect(after.weaveRuns.size).toBe(1);
+
+        const projection = after.weaveRuns.get(weaveRunId);
+        expect(projection).toBeDefined();
+        expect(projection?.run.id).toBe(weaveRunId);
+        expect(projection?.run.projectId).toBe(projectId);
+        expect(projection?.run.title).toBe("Shell Snapshot Test Weave");
+        expect(projection?.run.status).toBe("draft");
+        expect(projection?.run.createdAt).toBe(createdAt);
+        // No node statuses yet — all counts would be 0 in the shell summary.
+        expect(projection?.nodeStatuses.size).toBe(0);
+      } finally {
+        await system.dispose();
+      }
+    });
+  });
 });
