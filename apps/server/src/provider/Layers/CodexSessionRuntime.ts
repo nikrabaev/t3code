@@ -303,8 +303,8 @@ function buildCodexCollaborationMode(input: {
     return undefined;
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL_BY_PROVIDER.codex;
-  // Slice 1 stub: Codex API does not know about "weave" mode; weave runs its
-  // child threads in "default" interaction mode (ships in Slice 3).
+  // Codex API does not know about "weave" mode; weave child threads run in
+  // "default" mode at the Codex layer. Permanent translation, not a stub.
   const codexMode = input.interactionMode === "weave" ? "default" : input.interactionMode;
   return {
     mode: codexMode,

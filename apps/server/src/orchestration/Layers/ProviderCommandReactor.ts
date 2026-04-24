@@ -644,8 +644,9 @@ const make = Effect.gen(function* () {
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
-      // Slice 1 stub: weave threads run child turns in "default" mode; the outer
-      // weave aggregate does not produce provider turns directly (ships in Slice 3).
+      // Weave child threads run their own provider turns in "default" mode — the
+      // outer weave aggregate never produces provider turns directly. This is
+      // permanent architectural behavior, not a stub.
       interactionMode:
         event.payload.interactionMode === "weave" ? "default" : event.payload.interactionMode,
       createdAt: event.payload.createdAt,
