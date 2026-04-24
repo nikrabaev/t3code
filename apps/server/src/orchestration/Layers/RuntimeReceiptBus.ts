@@ -1,10 +1,11 @@
 /**
  * RuntimeReceiptBus layers.
  *
- * `RuntimeReceiptBusLive` is the production default and intentionally does not
- * retain or broadcast receipts. `RuntimeReceiptBusTest` installs the in-memory
- * PubSub-backed implementation used by integration tests that need to await
- * checkpoint-reactor milestones precisely.
+ * Both `RuntimeReceiptBusLive` and `RuntimeReceiptBusTest` use the same
+ * PubSub-backed implementation. Production needs broadcast so that the
+ * WeaveContractConformer receives `turn.processing.quiesced` receipts emitted
+ * by CheckpointReactor. `RuntimeReceiptBusTest` is kept as an alias for
+ * call-site compatibility; renaming is a separate cleanup task.
  *
  * @module RuntimeReceiptBus
  */
@@ -16,12 +17,10 @@ import {
   type OrchestrationRuntimeReceipt,
 } from "../Services/RuntimeReceiptBus.ts";
 
-const makeRuntimeReceiptBus = Effect.succeed({
-  publish: () => Effect.void,
-  streamEventsForTest: Stream.empty,
-} satisfies RuntimeReceiptBusShape);
-
-const makeRuntimeReceiptBusTest = Effect.gen(function* () {
+// Unify the Live and Test implementations — production needs broadcast so the
+// WeaveContractConformer receives turn.processing.quiesced receipts from
+// CheckpointReactor.
+const makeRuntimeReceiptBus = Effect.gen(function* () {
   const pubSub = yield* PubSub.unbounded<OrchestrationRuntimeReceipt>();
 
   return {
@@ -33,4 +32,6 @@ const makeRuntimeReceiptBusTest = Effect.gen(function* () {
 });
 
 export const RuntimeReceiptBusLive = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBus);
-export const RuntimeReceiptBusTest = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBusTest);
+// Historical alias — `RuntimeReceiptBusTest` is identical to Live now that
+// production also broadcasts. Kept for call-site compatibility.
+export const RuntimeReceiptBusTest = RuntimeReceiptBusLive;
