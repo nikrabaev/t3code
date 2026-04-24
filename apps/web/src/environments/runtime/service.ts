@@ -7,7 +7,10 @@ import {
   type ServerConfig,
   type TerminalEvent,
   ThreadId,
+  type WeaveRunId,
+  type WeaveRunStatus,
 } from "@t3tools/contracts";
+import { useEffect, useRef } from "react";
 import { type QueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 import {
@@ -373,6 +376,265 @@ export function retainThreadDetailSubscription(
       evictIdleThreadDetailSubscriptionsToCapacity();
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// Weave run detail subscriptions
+// ---------------------------------------------------------------------------
+// Mirrors the thread detail subscription system above.  One subscription per
+// (environmentId, weaveRunId) pair; ref-counted so multiple components can
+// share a single stream.  Eviction fires when refCount reaches 0 AND the run
+// has reached a terminal status ("complete" | "aborted").
+// ---------------------------------------------------------------------------
+
+const TERMINAL_WEAVE_RUN_STATUSES: ReadonlySet<WeaveRunStatus> = new Set([
+  "complete",
+  "aborted",
+] satisfies WeaveRunStatus[]);
+
+const WEAVE_RUN_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
+const MAX_CACHED_WEAVE_RUN_DETAIL_SUBSCRIPTIONS = 32;
+
+type WeaveRunDetailSubscriptionEntry = {
+  readonly environmentId: EnvironmentId;
+  readonly weaveRunId: WeaveRunId;
+  unsubscribe: () => void;
+  unsubscribeConnectionListener: (() => void) | null;
+  refCount: number;
+  lastAccessedAt: number;
+  evictionTimeoutId: ReturnType<typeof setTimeout> | null;
+};
+
+const weaveRunDetailSubscriptions = new Map<string, WeaveRunDetailSubscriptionEntry>();
+
+function getWeaveRunDetailSubscriptionKey(
+  environmentId: EnvironmentId,
+  weaveRunId: WeaveRunId,
+): string {
+  return `${environmentId}:${weaveRunId}`;
+}
+
+function clearWeaveRunDetailSubscriptionEviction(
+  entry: WeaveRunDetailSubscriptionEntry,
+): WeaveRunDetailSubscriptionEntry {
+  if (entry.evictionTimeoutId !== null) {
+    clearTimeout(entry.evictionTimeoutId);
+    entry.evictionTimeoutId = null;
+  }
+  return entry;
+}
+
+function isTerminalWeaveRunDetailSubscription(entry: WeaveRunDetailSubscriptionEntry): boolean {
+  // Look up the weave run shell from the store.  The shell is populated by the
+  // shell stream (Tasks 6+).  If the run is not yet known, treat it as
+  // non-terminal so the subscription stays alive.
+  const state = useStore.getState();
+  const shellSnapshot = (
+    state as unknown as { weaveRunShellById?: Record<string, { status: WeaveRunStatus }> }
+  ).weaveRunShellById;
+  if (!shellSnapshot) {
+    return false;
+  }
+  const shell = shellSnapshot[entry.weaveRunId];
+  if (!shell) {
+    return false;
+  }
+  return TERMINAL_WEAVE_RUN_STATUSES.has(shell.status);
+}
+
+function shouldEvictWeaveRunDetailSubscription(entry: WeaveRunDetailSubscriptionEntry): boolean {
+  return entry.refCount === 0 && isTerminalWeaveRunDetailSubscription(entry);
+}
+
+function attachWeaveRunDetailSubscription(entry: WeaveRunDetailSubscriptionEntry): boolean {
+  if (entry.unsubscribeConnectionListener !== null) {
+    entry.unsubscribeConnectionListener();
+    entry.unsubscribeConnectionListener = null;
+  }
+  if (entry.unsubscribe !== NOOP) {
+    return true;
+  }
+
+  const connection = readEnvironmentConnection(entry.environmentId);
+  if (!connection) {
+    return false;
+  }
+
+  entry.unsubscribe = connection.client.orchestration.subscribeWeaveRun(
+    { weaveRunId: entry.weaveRunId },
+    (item) => {
+      if (item.kind === "snapshot") {
+        useStore.getState().syncServerWeaveRunDetail(item.snapshot.weaveRun, entry.environmentId);
+        return;
+      }
+      useStore.getState().applyEnvironmentWeaveRunDetailEvent(item.event, entry.environmentId);
+    },
+  );
+  return true;
+}
+
+function watchWeaveRunDetailSubscriptionConnection(entry: WeaveRunDetailSubscriptionEntry): void {
+  if (entry.unsubscribeConnectionListener !== null) {
+    return;
+  }
+
+  entry.unsubscribeConnectionListener = subscribeEnvironmentConnections(() => {
+    if (attachWeaveRunDetailSubscription(entry)) {
+      entry.lastAccessedAt = Date.now();
+    }
+  });
+  attachWeaveRunDetailSubscription(entry);
+}
+
+function disposeWeaveRunDetailSubscriptionByKey(key: string): boolean {
+  const entry = weaveRunDetailSubscriptions.get(key);
+  if (!entry) {
+    return false;
+  }
+
+  clearWeaveRunDetailSubscriptionEviction(entry);
+  entry.unsubscribeConnectionListener?.();
+  entry.unsubscribeConnectionListener = null;
+  weaveRunDetailSubscriptions.delete(key);
+  entry.unsubscribe();
+  entry.unsubscribe = NOOP;
+  return true;
+}
+
+function disposeWeaveRunDetailSubscriptionsForEnvironment(environmentId: EnvironmentId): void {
+  for (const [key, entry] of weaveRunDetailSubscriptions) {
+    if (entry.environmentId === environmentId) {
+      disposeWeaveRunDetailSubscriptionByKey(key);
+    }
+  }
+}
+
+function scheduleWeaveRunDetailSubscriptionEviction(entry: WeaveRunDetailSubscriptionEntry): void {
+  clearWeaveRunDetailSubscriptionEviction(entry);
+  if (!shouldEvictWeaveRunDetailSubscription(entry)) {
+    return;
+  }
+
+  entry.evictionTimeoutId = setTimeout(() => {
+    const currentEntry = weaveRunDetailSubscriptions.get(
+      getWeaveRunDetailSubscriptionKey(entry.environmentId, entry.weaveRunId),
+    );
+    if (!currentEntry) {
+      return;
+    }
+
+    currentEntry.evictionTimeoutId = null;
+    if (!shouldEvictWeaveRunDetailSubscription(currentEntry)) {
+      return;
+    }
+    disposeWeaveRunDetailSubscriptionByKey(
+      getWeaveRunDetailSubscriptionKey(entry.environmentId, entry.weaveRunId),
+    );
+  }, WEAVE_RUN_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS);
+}
+
+function evictIdleWeaveRunDetailSubscriptionsToCapacity(): void {
+  if (weaveRunDetailSubscriptions.size <= MAX_CACHED_WEAVE_RUN_DETAIL_SUBSCRIPTIONS) {
+    return;
+  }
+
+  const idleEntries = [...weaveRunDetailSubscriptions.entries()]
+    .filter(([, entry]) => shouldEvictWeaveRunDetailSubscription(entry))
+    .toSorted(([, left], [, right]) => left.lastAccessedAt - right.lastAccessedAt);
+
+  for (const [key] of idleEntries) {
+    if (weaveRunDetailSubscriptions.size <= MAX_CACHED_WEAVE_RUN_DETAIL_SUBSCRIPTIONS) {
+      return;
+    }
+    disposeWeaveRunDetailSubscriptionByKey(key);
+  }
+}
+
+function reconcileWeaveRunDetailSubscriptionEvictionState(
+  entry: WeaveRunDetailSubscriptionEntry,
+): void {
+  clearWeaveRunDetailSubscriptionEviction(entry);
+  if (!shouldEvictWeaveRunDetailSubscription(entry)) {
+    return;
+  }
+
+  scheduleWeaveRunDetailSubscriptionEviction(entry);
+}
+
+export function retainWeaveRunDetailSubscription(
+  environmentId: EnvironmentId,
+  weaveRunId: WeaveRunId,
+): () => void {
+  const key = getWeaveRunDetailSubscriptionKey(environmentId, weaveRunId);
+  const existing = weaveRunDetailSubscriptions.get(key);
+  if (existing) {
+    clearWeaveRunDetailSubscriptionEviction(existing);
+    existing.refCount += 1;
+    existing.lastAccessedAt = Date.now();
+    if (!attachWeaveRunDetailSubscription(existing)) {
+      watchWeaveRunDetailSubscriptionConnection(existing);
+    }
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      existing.refCount = Math.max(0, existing.refCount - 1);
+      existing.lastAccessedAt = Date.now();
+      if (existing.refCount === 0) {
+        reconcileWeaveRunDetailSubscriptionEvictionState(existing);
+        evictIdleWeaveRunDetailSubscriptionsToCapacity();
+      }
+    };
+  }
+
+  const entry: WeaveRunDetailSubscriptionEntry = {
+    environmentId,
+    weaveRunId,
+    unsubscribe: NOOP,
+    unsubscribeConnectionListener: null,
+    refCount: 1,
+    lastAccessedAt: Date.now(),
+    evictionTimeoutId: null,
+  };
+  weaveRunDetailSubscriptions.set(key, entry);
+  if (!attachWeaveRunDetailSubscription(entry)) {
+    watchWeaveRunDetailSubscriptionConnection(entry);
+  }
+  evictIdleWeaveRunDetailSubscriptionsToCapacity();
+
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    entry.refCount = Math.max(0, entry.refCount - 1);
+    entry.lastAccessedAt = Date.now();
+    if (entry.refCount === 0) {
+      reconcileWeaveRunDetailSubscriptionEvictionState(entry);
+      evictIdleWeaveRunDetailSubscriptionsToCapacity();
+    }
+  };
+}
+
+export function useWeaveRunDetailSubscription(
+  environmentId: EnvironmentId | null | undefined,
+  weaveRunId: WeaveRunId | null | undefined,
+): void {
+  const releaseRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!environmentId || !weaveRunId) {
+      return;
+    }
+    releaseRef.current = retainWeaveRunDetailSubscription(environmentId, weaveRunId);
+    return () => {
+      releaseRef.current?.();
+      releaseRef.current = null;
+    };
+  }, [environmentId, weaveRunId]);
 }
 
 function emitEnvironmentConnectionRegistryChange() {
@@ -758,6 +1020,7 @@ async function removeConnection(environmentId: EnvironmentId): Promise<boolean> 
   }
 
   disposeThreadDetailSubscriptionsForEnvironment(environmentId);
+  disposeWeaveRunDetailSubscriptionsForEnvironment(environmentId);
   environmentConnections.delete(environmentId);
   emitEnvironmentConnectionRegistryChange();
   await connection.dispose();
@@ -1088,6 +1351,9 @@ export async function resetEnvironmentServiceForTests(): Promise<void> {
   stopActiveService();
   for (const key of Array.from(threadDetailSubscriptions.keys())) {
     disposeThreadDetailSubscriptionByKey(key);
+  }
+  for (const key of Array.from(weaveRunDetailSubscriptions.keys())) {
+    disposeWeaveRunDetailSubscriptionByKey(key);
   }
   await Promise.all(
     [...environmentConnections.keys()].map((environmentId) => removeConnection(environmentId)),

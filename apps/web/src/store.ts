@@ -17,6 +17,7 @@ import type {
   ProjectId,
   ScopedProjectRef,
   ScopedThreadRef,
+  WeaveRunProjection,
 } from "@t3tools/contracts";
 import { ProviderKind } from "@t3tools/contracts";
 import type { ThreadId, TurnId } from "@t3tools/contracts";
@@ -1934,6 +1935,13 @@ interface AppStore extends AppState {
     environmentId: EnvironmentId,
   ) => void;
   syncServerThreadDetail: (thread: OrchestrationThread, environmentId: EnvironmentId) => void;
+  // Task 5 stub: replaced with a real reducer when the weave run store slice lands.
+  syncServerWeaveRunDetail: (weaveRun: WeaveRunProjection, environmentId: EnvironmentId) => void;
+  // Task 5 stub: replaced with a real reducer when the weave run store slice lands.
+  applyEnvironmentWeaveRunDetailEvent: (
+    event: OrchestrationEvent,
+    environmentId: EnvironmentId,
+  ) => void;
   applyOrchestrationEvent: (event: OrchestrationEvent, environmentId: EnvironmentId) => void;
   applyOrchestrationEvents: (
     events: ReadonlyArray<OrchestrationEvent>,
@@ -1956,6 +1964,10 @@ export const useStore = create<AppStore>((set) => ({
     set((state) => syncServerShellSnapshot(state, snapshot, environmentId)),
   syncServerThreadDetail: (thread, environmentId) =>
     set((state) => syncServerThreadDetail(state, thread, environmentId)),
+  // Task 5 stub — no-op until the weave run store slice is implemented.
+  syncServerWeaveRunDetail: (_weaveRun, _environmentId) => undefined,
+  // Task 5 stub — no-op until the weave run store slice is implemented.
+  applyEnvironmentWeaveRunDetailEvent: (_event, _environmentId) => undefined,
   applyOrchestrationEvent: (event, environmentId) =>
     set((state) => applyOrchestrationEvent(state, event, environmentId)),
   applyOrchestrationEvents: (events, environmentId) =>

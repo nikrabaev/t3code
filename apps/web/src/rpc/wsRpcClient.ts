@@ -118,6 +118,9 @@ export interface WsRpcClient {
     readonly getFullThreadDiff: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.getFullThreadDiff>;
     readonly subscribeShell: RpcStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeShell>;
     readonly subscribeThread: RpcInputStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeThread>;
+    readonly subscribeWeaveRun: RpcInputStreamMethod<
+      typeof ORCHESTRATION_WS_METHODS.subscribeWeaveRun
+    >;
   };
 }
 
@@ -248,6 +251,12 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
       subscribeThread: (input, listener, options) =>
         transport.subscribe(
           (client) => client[ORCHESTRATION_WS_METHODS.subscribeThread](input),
+          listener,
+          options,
+        ),
+      subscribeWeaveRun: (input, listener, options) =>
+        transport.subscribe(
+          (client) => client[ORCHESTRATION_WS_METHODS.subscribeWeaveRun](input),
           listener,
           options,
         ),
