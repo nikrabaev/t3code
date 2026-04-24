@@ -63,6 +63,7 @@ import {
   type SessionCredentialChange,
 } from "./auth/Services/SessionCredentialService.ts";
 import { respondToAuthError } from "./auth/http.ts";
+import { WeaveEngineService } from "./orchestration/Services/WeaveEngine.ts";
 
 function isThreadDetailEvent(event: OrchestrationEvent): event is Extract<
   OrchestrationEvent,
@@ -133,6 +134,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
     Effect.gen(function* () {
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
       const orchestrationEngine = yield* OrchestrationEngineService;
+      const weaveEngine = yield* WeaveEngineService;
       const checkpointDiffQuery = yield* CheckpointDiffQuery;
       const keybindings = yield* Keybindings;
       const open = yield* Open;
@@ -738,6 +740,44 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                   snapshot: {
                     snapshotSequence,
                     thread: threadDetail.value,
+                  },
+                }),
+                liveStream,
+              );
+            }),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.subscribeWeaveRun]: (input) =>
+          observeRpcStreamEffect(
+            ORCHESTRATION_WS_METHODS.subscribeWeaveRun,
+            Effect.gen(function* () {
+              const weaveRun = yield* weaveEngine.getWeaveRun(input.weaveRunId);
+
+              if (weaveRun === null) {
+                return yield* new OrchestrationGetSnapshotError({
+                  message: `WeaveRun ${input.weaveRunId} was not found`,
+                  cause: input.weaveRunId,
+                });
+              }
+
+              const snapshotSequence = yield* orchestrationEngine
+                .getReadModel()
+                .pipe(Effect.map((readModel) => readModel.snapshotSequence));
+
+              const liveStream = weaveEngine.streamWeaveEvents.pipe(
+                Stream.filter((event) => event.aggregateId === input.weaveRunId),
+                Stream.map((event) => ({
+                  kind: "event" as const,
+                  event,
+                })),
+              );
+
+              return Stream.concat(
+                Stream.make({
+                  kind: "snapshot" as const,
+                  snapshot: {
+                    snapshotSequence,
+                    weaveRun,
                   },
                 }),
                 liveStream,

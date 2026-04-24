@@ -96,6 +96,7 @@ import {
   RepositoryIdentityResolver,
   type RepositoryIdentityResolverShape,
 } from "./project/Services/RepositoryIdentityResolver.ts";
+import { WeaveEngineService } from "./orchestration/Services/WeaveEngine.ts";
 import {
   ServerEnvironment,
   type ServerEnvironmentShape,
@@ -501,6 +502,14 @@ const buildAppUnderTest = (options?: {
               diff: "",
             }),
           ...options?.layers?.checkpointDiffQuery,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(WeaveEngineService)({
+          dispatchWeaveCommand: () => Effect.succeed({ sequence: 0 }),
+          getWeaveRun: () => Effect.succeed(null),
+          streamWeaveEvents: Stream.empty,
+          persistPlannerEvent: () => Effect.succeed({ sequence: 0 }),
         }),
       ),
     );

@@ -51,6 +51,7 @@ export const ORCHESTRATION_WS_METHODS = {
   replayEvents: "orchestration.replayEvents",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
+  subscribeWeaveRun: "orchestration.subscribeWeaveRun",
 } as const;
 
 export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "cursor", "opencode"]);
@@ -469,6 +470,17 @@ export const OrchestrationSubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
 export type OrchestrationSubscribeThreadInput = typeof OrchestrationSubscribeThreadInput.Type;
+
+export const OrchestrationSubscribeWeaveRunInput = Schema.Struct({
+  weaveRunId: WeaveRunId,
+});
+export type OrchestrationSubscribeWeaveRunInput = typeof OrchestrationSubscribeWeaveRunInput.Type;
+
+export const OrchestrationWeaveRunDetailSnapshot = Schema.Struct({
+  snapshotSequence: NonNegativeInt,
+  weaveRun: WeaveRunProjectionSchema,
+});
+export type OrchestrationWeaveRunDetailSnapshot = typeof OrchestrationWeaveRunDetailSnapshot.Type;
 
 export const OrchestrationThreadDetailSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
@@ -1221,6 +1233,21 @@ export const OrchestrationThreadStreamItem = Schema.Union([
 ]);
 export type OrchestrationThreadStreamItem = typeof OrchestrationThreadStreamItem.Type;
 
+export const OrchestrationWeaveRunDetailEvent = Schema.Struct({
+  kind: Schema.Literal("event"),
+  event: OrchestrationEvent,
+});
+export type OrchestrationWeaveRunDetailEvent = typeof OrchestrationWeaveRunDetailEvent.Type;
+
+export const OrchestrationWeaveRunStreamItem = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("snapshot"),
+    snapshot: OrchestrationWeaveRunDetailSnapshot,
+  }),
+  OrchestrationWeaveRunDetailEvent,
+]);
+export type OrchestrationWeaveRunStreamItem = typeof OrchestrationWeaveRunStreamItem.Type;
+
 export const OrchestrationCommandReceiptStatus = Schema.Literals(["accepted", "rejected"]);
 export type OrchestrationCommandReceiptStatus = typeof OrchestrationCommandReceiptStatus.Type;
 
@@ -1335,6 +1362,10 @@ export const OrchestrationRpcSchemas = {
   subscribeShell: {
     input: Schema.Struct({}),
     output: OrchestrationShellStreamItem,
+  },
+  subscribeWeaveRun: {
+    input: OrchestrationSubscribeWeaveRunInput,
+    output: OrchestrationWeaveRunStreamItem,
   },
 } as const;
 

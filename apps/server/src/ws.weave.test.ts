@@ -6,7 +6,7 @@ import {
   WeaveDecisionId,
   type WeaveDispatchableCommand,
 } from "@t3tools/contracts";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Queue, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
@@ -114,6 +114,89 @@ describe("ws.weave RPC integration", () => {
         const projection = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
         expect(projection).not.toBeNull();
         expect(projection?.run.status).toBe("draft");
+      } finally {
+        await system.dispose();
+      }
+    });
+  });
+
+  describe("subscribeWeaveRun snapshot + stream", () => {
+    it("getWeaveRun returns null before create and snapshot after", async () => {
+      const system = await createOrchestrationSystem();
+      try {
+        const weaveRunId = WeaveRunId.make("subscribe-test-run");
+        const projectId = ProjectId.make("subscribe-test-project");
+
+        // Before create: getWeaveRun returns null (snapshot would not be emitted).
+        const before = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
+        expect(before).toBeNull();
+
+        // Dispatch weave.create to set up the run.
+        const command: WeaveDispatchableCommand = {
+          type: "weave.create",
+          commandId: CommandId.make("subscribe-cmd"),
+          weaveRunId,
+          projectId,
+          title: "Subscribe Test Weave",
+          vision: "subscribe test vision",
+          createdAt: now(),
+        };
+        await system.run(system.engine.dispatch(command));
+
+        // After create: getWeaveRun returns the projection (snapshot kind would be emitted).
+        const snapshot = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
+        expect(snapshot).not.toBeNull();
+        expect(snapshot?.run.status).toBe("draft");
+        expect(snapshot?.run.id).toBe(weaveRunId);
+
+        // Verify snapshotSequence is available from the read model.
+        const readModel = await system.run(system.engine.getReadModel());
+        expect(readModel.snapshotSequence).toBeGreaterThan(0);
+      } finally {
+        await system.dispose();
+      }
+    });
+
+    it("streamWeaveEvents emits a weave.created event after dispatch", async () => {
+      const system = await createOrchestrationSystem();
+      try {
+        const weaveRunId = WeaveRunId.make("stream-events-test-run");
+        const projectId = ProjectId.make("stream-events-test-project");
+
+        const collectedTypes: string[] = [];
+
+        await system.run(
+          Effect.gen(function* () {
+            const weaveQueue = yield* Queue.unbounded<string>();
+
+            // Subscribe to the stream via forkScoped + sleep to ensure attachment.
+            yield* Effect.forkScoped(
+              Stream.take(system.weaveEngine.streamWeaveEvents, 1).pipe(
+                Stream.runForEach((event) => Queue.offer(weaveQueue, event.type)),
+              ),
+            );
+
+            // Give the subscriber time to attach.
+            yield* Effect.sleep("10 millis");
+
+            // Dispatch weave.create — emits weave.created on the stream.
+            yield* system.engine.dispatch({
+              type: "weave.create",
+              commandId: CommandId.make("stream-events-cmd"),
+              weaveRunId,
+              projectId,
+              title: "Stream Events Test Weave",
+              vision: "stream events test vision",
+              createdAt: now(),
+            });
+
+            // Collect the one weave event.
+            const eventType = yield* Queue.take(weaveQueue);
+            collectedTypes.push(eventType);
+          }).pipe(Effect.scoped),
+        );
+
+        expect(collectedTypes).toEqual(["weave.created"]);
       } finally {
         await system.dispose();
       }
