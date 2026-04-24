@@ -28,7 +28,7 @@ export const WeaveEngineLive = Layer.effect(
         aggregateId: input.runId,
         type: "weave.blueprint-compiled" as const,
         occurredAt,
-        commandId: input.correlationCommandId ?? null,
+        commandId: null,
         causationEventId: null,
         correlationId: input.correlationCommandId ?? null,
         metadata: {},

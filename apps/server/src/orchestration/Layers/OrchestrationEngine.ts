@@ -308,11 +308,16 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
   // appendSystemEvent: persist an event that was not produced by the decider.
   // Bypasses the command queue — no receipt is written (no commandId).
-  // v0.1 note: racing with concurrent command dispatch can interleave readModel
-  // reads, but the planner only fires on weave.created which has already settled.
-  // Projection errors are treated as defects (orDie) because the event is already
-  // persisted at that point; a decode error in the projector is a bug, not a
-  // recoverable domain failure.
+  //
+  // Direct persist path for system-originated events (e.g., planner-emitted
+  // weave.blueprint-compiled). Races with concurrent command dispatches on the
+  // shared readModel are possible — v0.1 accepts this. Slice 4 should either route
+  // system events through the commandQueue or add a serializing lock. See followup.
+  //
+  // Unlike dispatch, this does NOT roll back the persisted event if the projector
+  // fails (projector errors are treated as defects via Effect.orDie). v0.1 accepts
+  // this inconsistency because planner-generated envelopes are synthesized in-code
+  // and decode should always succeed.
   const appendSystemEvent: OrchestrationEngineShape["appendSystemEvent"] = (event) =>
     Effect.gen(function* () {
       const savedEvent = yield* eventStore.append(event);
