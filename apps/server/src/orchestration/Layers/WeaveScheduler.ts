@@ -27,6 +27,7 @@ import { Cause, Effect, Layer, Stream } from "effect";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { GitCore } from "../../git/Services/GitCore.ts";
+import type { GitCommandError } from "@t3tools/contracts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { WeaveEngineService, type WeaveEngineShape } from "../Services/WeaveEngine.ts";
 import { WeaveScheduler, type WeaveSchedulerShape } from "../Services/WeaveScheduler.ts";
@@ -187,14 +188,49 @@ const processSchedulerDecision = Effect.fn("WeaveScheduler.processSchedulerDecis
   // Allocate the worktree. Use HEAD as the base ref so the new branch is
   // created from whatever the project's current branch is, regardless of
   // its name (main / master / dev / anything else). The repo must have at
-  // least one commit; if not, createWorktree will surface a clear error.
-  const worktreeResult = yield* git.createWorktree({
-    cwd: workspaceRoot,
-    branch: "HEAD",
-    newBranch: branchName,
-    path: null,
-  });
-  const worktreePath = worktreeResult.worktree.path;
+  // least one commit; if not, fail the node with a friendly reason rather
+  // than letting the raw git error abort the entire run.
+  type WorktreeOutcome =
+    | { readonly kind: "ok"; readonly path: string }
+    | { readonly kind: "failed"; readonly reason: string };
+
+  const worktreeOutcome: WorktreeOutcome = yield* git
+    .createWorktree({
+      cwd: workspaceRoot,
+      branch: "HEAD",
+      newBranch: branchName,
+      path: null,
+    })
+    .pipe(
+      Effect.map((result): WorktreeOutcome => ({ kind: "ok", path: result.worktree.path })),
+      Effect.catch((error: GitCommandError): Effect.Effect<WorktreeOutcome> => {
+        const detail = error.detail ?? "";
+        const isUnbornHead = /not a valid object name: 'HEAD'/.test(detail);
+        const reason = isUnbornHead
+          ? `Project repository has no commits. Make at least one commit in ${workspaceRoot} before running /weave.`
+          : `git worktree creation failed: ${error.message}`;
+        return Effect.succeed({ kind: "failed", reason });
+      }),
+    );
+
+  if (worktreeOutcome.kind === "failed") {
+    yield* Effect.logError("WeaveScheduler: failing node — worktree creation failed", {
+      runId,
+      nodeId: next.id,
+      reason: worktreeOutcome.reason,
+    });
+    yield* weaveEngine.dispatchWeaveCommand({
+      type: "weave.node.failed",
+      commandId: serverCommandId(),
+      weaveRunId: runId,
+      nodeId: next.id,
+      reason: worktreeOutcome.reason,
+      createdAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const worktreePath = worktreeOutcome.path;
 
   // Create the child thread
   const childThreadId = ThreadId.make(crypto.randomUUID());
