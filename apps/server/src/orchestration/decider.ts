@@ -115,6 +115,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
           scripts: [],
+          verifierCommand: command.verifierCommand ?? null,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -144,6 +145,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
+          ...(command.verifierCommand !== undefined
+            ? { verifierCommand: command.verifierCommand }
+            : {}),
           updatedAt: occurredAt,
         },
       };

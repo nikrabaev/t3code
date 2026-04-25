@@ -5,14 +5,17 @@
  *  1. Fetch the current read model and reverse-lookup the thread ID across all
  *     weave runs via `childThreads`. O(runs × nodes) — acceptable for v0.1.
  *  2. If no match, skip (non-weave thread).
- *  3. Run `bun run test` in the node's worktree path (capped at 120 seconds).
+ *  3. Resolve the verifier command (node override → project default →
+ *     hardcoded `bun run test`) and run it in the node's worktree path
+ *     (capped at 120 seconds). Argv split is whitespace-only; users with
+ *     complex shell pipelines should wrap them in a script.
  *  4. Exit 0   → dispatch `weave.node.verified`.
  *     Non-zero  → dispatch `weave.node.failed` with exit code in reason.
  *     Timeout   → dispatch `weave.node.failed` with reason "timeout".
  *
  * @module WeaveContractConformerLive
  */
-import { CommandId, WeaveNodeId, WeaveRunId } from "@t3tools/contracts";
+import { CommandId, WeaveNodeId, WeaveRunId, type ProjectId } from "@t3tools/contracts";
 import { Cause, Effect, Layer, Stream } from "effect";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
@@ -27,8 +30,28 @@ import {
 import type { TurnProcessingQuiescedReceipt } from "../Services/RuntimeReceiptBus.ts";
 
 const VERIFIER_TIMEOUT_MS = 120_000;
+const DEFAULT_VERIFIER_COMMAND = "bun run test";
 
 const serverCommandId = (): CommandId => CommandId.make(`server:conformer:${crypto.randomUUID()}`);
+
+/**
+ * Split a verifier command string into argv. Whitespace-only — quoting and
+ * shell metacharacters are not handled. Users with complex commands should
+ * wrap them in a script the project knows how to invoke.
+ *
+ * Exported for unit testing.
+ */
+export function splitVerifierCommand(command: string): { command: string; args: string[] } {
+  const tokens = command
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) {
+    throw new Error(`splitVerifierCommand: empty command "${command}"`);
+  }
+  const [head, ...args] = tokens;
+  return { command: head!, args };
+}
 
 // ── Reverse-lookup helper ─────────────────────────────────────────────────────
 
@@ -43,6 +66,13 @@ function findWeaveNodeForThread(
   weaveRuns: ReadonlyMap<
     WeaveRunId,
     {
+      readonly run: { readonly projectId: ProjectId };
+      readonly currentBlueprint: {
+        readonly nodes: ReadonlyArray<{
+          readonly id: WeaveNodeId;
+          readonly verifierCommand?: string | undefined;
+        }>;
+      } | null;
       readonly childThreads: ReadonlyMap<
         WeaveNodeId,
         { readonly threadId: string; readonly worktreePath: string }
@@ -50,11 +80,24 @@ function findWeaveNodeForThread(
     }
   >,
   threadId: string,
-): { weaveRunId: WeaveRunId; nodeId: WeaveNodeId; worktreePath: string } | null {
+): {
+  weaveRunId: WeaveRunId;
+  nodeId: WeaveNodeId;
+  worktreePath: string;
+  projectId: ProjectId;
+  nodeVerifierCommand: string | null;
+} | null {
   for (const [weaveRunId, run] of weaveRuns) {
     for (const [nodeId, entry] of run.childThreads) {
       if (entry.threadId === threadId) {
-        return { weaveRunId, nodeId, worktreePath: entry.worktreePath };
+        const node = run.currentBlueprint?.nodes.find((n) => n.id === nodeId) ?? null;
+        return {
+          weaveRunId,
+          nodeId,
+          worktreePath: entry.worktreePath,
+          projectId: run.run.projectId,
+          nodeVerifierCommand: node?.verifierCommand ?? null,
+        };
       }
     }
   }
@@ -83,31 +126,46 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const { weaveRunId, nodeId, worktreePath } = match;
+      const { weaveRunId, nodeId, worktreePath, projectId, nodeVerifierCommand } = match;
 
-      yield* Effect.log("WeaveContractConformer: running bun test in worktree", {
+      // Step 2: resolve the verifier command — node override beats project
+      // default beats the hardcoded fallback.
+      const project = readModel.projects.find((p) => p.id === projectId) ?? null;
+      const projectVerifierCommand = project?.verifierCommand ?? null;
+      const resolvedCommand =
+        nodeVerifierCommand ?? projectVerifierCommand ?? DEFAULT_VERIFIER_COMMAND;
+      const { command, args } = splitVerifierCommand(resolvedCommand);
+
+      yield* Effect.log("WeaveContractConformer: running verifier in worktree", {
         threadId: receipt.threadId,
         weaveRunId,
         nodeId,
         worktreePath,
+        verifierCommand: resolvedCommand,
+        verifierSource: nodeVerifierCommand
+          ? "node"
+          : projectVerifierCommand
+            ? "project"
+            : "default",
       });
 
-      // Step 2: run the verifier.
+      // Step 3: run the verifier.
       const result = yield* processRunner.run({
-        command: "bun",
-        args: ["run", "test"],
+        command,
+        args,
         cwd: worktreePath,
         timeoutMs: VERIFIER_TIMEOUT_MS,
       });
 
       const createdAt = new Date().toISOString();
 
-      // Step 3: dispatch the outcome command.
+      // Step 4: dispatch the outcome command.
       if (result.timedOut) {
-        yield* Effect.log("WeaveContractConformer: bun test timed out", {
+        yield* Effect.log("WeaveContractConformer: verifier timed out", {
           weaveRunId,
           nodeId,
           worktreePath,
+          verifierCommand: resolvedCommand,
         });
         yield* weaveEngine.dispatchWeaveCommand({
           type: "weave.node.failed",
@@ -121,30 +179,32 @@ const make = Effect.gen(function* () {
       }
 
       if (result.exitCode === 0) {
-        yield* Effect.log("WeaveContractConformer: bun test passed", {
+        yield* Effect.log("WeaveContractConformer: verifier passed", {
           weaveRunId,
           nodeId,
+          verifierCommand: resolvedCommand,
         });
         yield* weaveEngine.dispatchWeaveCommand({
           type: "weave.node.verified",
           commandId: serverCommandId(),
           weaveRunId,
           nodeId,
-          verifierOutcome: "bun run test exit 0",
+          verifierOutcome: `${resolvedCommand} exit 0`,
           createdAt,
         });
       } else {
-        yield* Effect.log("WeaveContractConformer: bun test failed", {
+        yield* Effect.log("WeaveContractConformer: verifier failed", {
           weaveRunId,
           nodeId,
           exitCode: result.exitCode,
+          verifierCommand: resolvedCommand,
         });
         yield* weaveEngine.dispatchWeaveCommand({
           type: "weave.node.failed",
           commandId: serverCommandId(),
           weaveRunId,
           nodeId,
-          reason: `bun run test exit ${result.exitCode}`,
+          reason: `${resolvedCommand} exit ${result.exitCode}`,
           createdAt,
         });
       }

@@ -78,16 +78,17 @@ const attemptCompile = (
  * Resolve the workspace root for a project from the orchestration read model.
  * Falls back to process.cwd() if the project is not found.
  */
-const resolveProjectWorkspaceRoot = Effect.fn("WeavePlanner.resolveProjectWorkspaceRoot")(
-  function* (
-    orchestrationEngine: OrchestrationEngineShape,
-    projectId: WeaveCreatedEvent["payload"]["projectId"],
-  ) {
-    const readModel = yield* orchestrationEngine.getReadModel();
-    const project = readModel.projects.find((p) => p.id === projectId);
-    return project?.workspaceRoot ?? process.cwd();
-  },
-);
+const resolveProjectMeta = Effect.fn("WeavePlanner.resolveProjectMeta")(function* (
+  orchestrationEngine: OrchestrationEngineShape,
+  projectId: WeaveCreatedEvent["payload"]["projectId"],
+) {
+  const readModel = yield* orchestrationEngine.getReadModel();
+  const project = readModel.projects.find((p) => p.id === projectId);
+  return {
+    workspaceRoot: project?.workspaceRoot ?? process.cwd(),
+    verifierCommand: project?.verifierCommand ?? null,
+  };
+});
 
 /**
  * Process a single weave.created event: compile → decode → persist or abort.
@@ -101,7 +102,8 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
   const { weaveRunId, vision, snapshotContent = "", projectId, title } = event.payload;
   const correlationCommandId = event.commandId ?? undefined;
 
-  const projectWorkspaceRoot = yield* resolveProjectWorkspaceRoot(orchestrationEngine, projectId);
+  const { workspaceRoot: projectWorkspaceRoot, verifierCommand: projectVerifierCommand } =
+    yield* resolveProjectMeta(orchestrationEngine, projectId);
 
   yield* Effect.log("WeavePlanner: compiling blueprint for run", { weaveRunId });
 
@@ -112,6 +114,7 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
     projectWorkspaceRoot,
     vision,
     snapshotContent,
+    ...(projectVerifierCommand !== null ? { projectVerifierCommand } : {}),
   };
 
   // First attempt

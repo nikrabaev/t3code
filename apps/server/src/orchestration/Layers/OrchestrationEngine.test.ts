@@ -110,6 +110,7 @@ describe("OrchestrationEngine", () => {
             model: "gpt-5-codex",
           },
           scripts: [],
+          verifierCommand: null,
           createdAt: "2026-03-03T00:00:00.000Z",
           updatedAt: "2026-03-03T00:00:01.000Z",
           deletedAt: null,

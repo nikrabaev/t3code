@@ -20,12 +20,28 @@
 
 /**
  * Build the structured prompt the planner sends to the LLM.
+ *
+ * @param input.projectVerifierCommand - Project-level Weave verifier default
+ *   (e.g. `"npm test"`, `"cargo test"`). When provided, the planner is told
+ *   this is the default and is invited to emit per-node `verifierCommand`
+ *   only for nodes whose verification is *not* the project default. When
+ *   absent, the planner is asked to infer an appropriate command from the
+ *   codebase snapshot.
  */
 export function buildPlannerPrompt(input: {
   vision: string;
   snapshotContent: string;
+  projectVerifierCommand?: string;
   previousError?: string;
 }): string {
+  const projectVerifierCommand = input.projectVerifierCommand?.trim();
+  const verifierCommandSchemaLine = projectVerifierCommand
+    ? `      "verifierCommand": "<optional — omit unless this node needs a different command than the project default '${projectVerifierCommand}'>",`
+    : '      "verifierCommand": "<optional — non-empty shell command, omit to use the runtime default>",';
+  const verifierGuidanceRule = projectVerifierCommand
+    ? `- The project-level Weave verifier command is \`${projectVerifierCommand}\`. Emit \`verifierCommand\` per node ONLY when this node should be verified with a different command (e.g. a docs node verified with \`mkdocs build\`, a contract node with a typecheck-only command). Omit the field for nodes that use the project default.`
+    : "- The runtime falls back to `bun run test` if no `verifierCommand` is set. If the project uses a different test runner (e.g. `npm test`, `cargo test`, `pytest`), emit `verifierCommand` per node accordingly. Detect the project type from the codebase snapshot (package.json scripts, Cargo.toml, pyproject.toml, etc.).";
+
   const parts: string[] = [
     "You are the Weave planner. Compile a Blueprint from the user's vision.",
     "",
@@ -59,6 +75,7 @@ export function buildPlannerPrompt(input: {
     '      "inputContractIds": [],',
     '      "outputContractIds": [],',
     '      "verifierDescription": "<string>",',
+    verifierCommandSchemaLine,
     '      "dependsOn": [],',
     '      "status": "pending"',
     "    }",
@@ -92,6 +109,7 @@ export function buildPlannerPrompt(input: {
     '- contracts and decisions arrays MAY BE EMPTY ([]). For a simple Blueprint, emit `"contracts": []` and `"decisions": []` rather than inventing entries.',
     "- If you DO emit a contract entry, every required field above must be present (no omissions).",
     "- At least one phase and one node are required.",
+    verifierGuidanceRule,
     "",
     "USER VISION:",
     input.vision,

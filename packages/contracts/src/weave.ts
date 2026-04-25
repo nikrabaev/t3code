@@ -139,6 +139,12 @@ export const WeaveNode = Schema.Struct({
   inputContractIds: Schema.Array(WeaveContractId),
   outputContractIds: Schema.Array(WeaveContractId),
   verifierDescription: Schema.String,
+  // Optional per-node verifier command override. When set, the runtime
+  // executes this exact command (whitespace-split into argv) in the node's
+  // worktree instead of the project default. Use it for nodes whose verifier
+  // is not the project's standard test runner — e.g. a docs node may verify
+  // with `mkdocs build`, a contract node with `bun typecheck`.
+  verifierCommand: Schema.optional(TrimmedNonEmptyString),
   dependsOn: Schema.Array(WeaveNodeId),
   advisoryDeps: Schema.optional(Schema.Array(WeaveNodeId)),
   status: WeaveNodeStatus,

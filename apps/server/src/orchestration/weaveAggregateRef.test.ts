@@ -36,6 +36,7 @@ describe("aggregateRefOf", () => {
         repositoryIdentity: null,
         defaultModelSelection: null,
         scripts: [],
+        verifierCommand: null,
         createdAt: baseEnvelope.occurredAt,
         updatedAt: baseEnvelope.occurredAt,
       },

@@ -132,6 +132,7 @@ function createBaseSnapshot(): OrchestrationReadModel {
         workspaceRoot: "/repo/project",
         defaultModelSelection: { provider: "codex", model: "gpt-5" },
         scripts: [],
+        verifierCommand: null,
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
         deletedAt: null,

@@ -44,4 +44,23 @@ describe("buildPlannerPrompt", () => {
     const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
     expect(prompt).toContain("(empty)");
   });
+
+  it("without projectVerifierCommand, prompts the planner to infer the test runner", () => {
+    const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
+    expect(prompt).toContain('"verifierCommand"');
+    expect(prompt).toContain("falls back to `bun run test`");
+    expect(prompt).toContain("package.json scripts");
+  });
+
+  it("with projectVerifierCommand, names the project default and asks for overrides only", () => {
+    const prompt = buildPlannerPrompt({
+      vision: "v",
+      snapshotContent: "",
+      projectVerifierCommand: "cargo test",
+    });
+    expect(prompt).toContain('"verifierCommand"');
+    expect(prompt).toContain("`cargo test`");
+    expect(prompt).toContain("ONLY when this node should be verified with a different command");
+    expect(prompt).not.toContain("falls back to `bun run test`");
+  });
 });

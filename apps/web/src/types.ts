@@ -88,6 +88,8 @@ export interface Project {
   cwd: string;
   repositoryIdentity?: RepositoryIdentity | null;
   defaultModelSelection: ModelSelection | null;
+  /** Project-level Weave verifier command override. `null` falls back to the runtime default. */
+  verifierCommand: string | null;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
   scripts: ProjectScript[];

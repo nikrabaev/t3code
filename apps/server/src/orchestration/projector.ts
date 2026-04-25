@@ -187,6 +187,7 @@ export function projectEvent(
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
             scripts: payload.scripts,
+            verifierCommand: payload.verifierCommand,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             deletedAt: null,
@@ -219,6 +220,9 @@ export function projectEvent(
                     ? { defaultModelSelection: payload.defaultModelSelection }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
+                  ...(payload.verifierCommand !== undefined
+                    ? { verifierCommand: payload.verifierCommand }
+                    : {}),
                   updatedAt: payload.updatedAt,
                 }
               : project,
