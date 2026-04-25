@@ -123,7 +123,15 @@ const makeAnalyticsService = Effect.gen(function* () {
         ),
       );
     }
-  }).pipe(Effect.catch((cause) => Effect.logError("Failed to flush telemetry", { cause })));
+  }).pipe(
+    Effect.catch((cause) =>
+      // Demoted to logDebug: telemetry flush failures (e.g. PostHog
+      // unreachable while offline) fire once per second under failure
+      // and produced too much console noise at error level. The full
+      // cause is still available at debug verbosity for diagnosis.
+      Effect.logDebug("Failed to flush telemetry", { cause }),
+    ),
+  );
 
   const record: AnalyticsServiceShape["record"] = Effect.fn("record")(
     function* (event, properties) {
