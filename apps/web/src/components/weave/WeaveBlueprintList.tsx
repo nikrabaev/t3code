@@ -4,6 +4,7 @@ import type {
   ThreadId,
   WeaveNode,
   WeaveNodeId,
+  WeaveNodeMeta,
   WeaveNodeStatus,
   WeaveRunId,
   WeaveRunProjection,
@@ -21,7 +22,8 @@ export interface WeaveBlueprintListProps {
 
 interface NodeRowProps {
   readonly node: WeaveNode;
-  readonly detail: WeaveRunProjection;
+  readonly meta: WeaveNodeMeta | null;
+  readonly childThreadId: ThreadId | null;
   readonly environmentId: EnvironmentId;
   readonly openNodeId: WeaveNodeId | undefined;
   readonly now: number;
@@ -31,16 +33,14 @@ interface NodeRowProps {
 
 function NodeRow({
   node,
-  detail,
+  meta,
+  childThreadId,
   environmentId,
   openNodeId,
   now,
   dependsOnStatuses,
   onClick,
 }: NodeRowProps) {
-  const meta = detail.nodeMeta.get(node.id) ?? null;
-  const childThreadId =
-    meta?.status === "running" ? (detail.childThreads.get(node.id)?.threadId ?? null) : null;
   // Always call the hook (rules of hooks). Use a stable sentinel when there's
   // no thread to look up — the selector returns null for unknown ids.
   const latestMessage = useLatestAssistantText(
@@ -108,23 +108,31 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
               {phase.title}
             </h2>
             <div className="flex flex-col">
-              {phaseNodes.map((node) => (
-                <NodeRow
-                  key={node.id}
-                  node={node}
-                  detail={detail}
-                  environmentId={environmentId}
-                  openNodeId={openNodeId}
-                  now={now}
-                  dependsOnStatuses={dependsOnStatuses}
-                  onClick={() =>
-                    void navigate({
-                      to: "/$environmentId/weave/$weaveRunId/node/$nodeId",
-                      params: { environmentId, weaveRunId, nodeId: node.id },
-                    })
-                  }
-                />
-              ))}
+              {phaseNodes.map((node) => {
+                const meta = detail.nodeMeta.get(node.id) ?? null;
+                const childThreadId =
+                  meta?.status === "running"
+                    ? (detail.childThreads.get(node.id)?.threadId ?? null)
+                    : null;
+                return (
+                  <NodeRow
+                    key={node.id}
+                    node={node}
+                    meta={meta}
+                    childThreadId={childThreadId}
+                    environmentId={environmentId}
+                    openNodeId={openNodeId}
+                    now={now}
+                    dependsOnStatuses={dependsOnStatuses}
+                    onClick={() =>
+                      void navigate({
+                        to: "/$environmentId/weave/$weaveRunId/node/$nodeId",
+                        params: { environmentId, weaveRunId, nodeId: node.id },
+                      })
+                    }
+                  />
+                );
+              })}
             </div>
           </section>
         );
