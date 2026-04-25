@@ -1365,6 +1365,27 @@ export const ChatComposer = memo(
             }
             return;
           }
+          if (item.command === "weave") {
+            // /weave is a one-shot dispatch (not a mode switch). Drop "/weave "
+            // into the composer so the user can press Enter to submit; the
+            // ChatView onSend handler will parse it and dispatch weave.create.
+            const replacement = "/weave ";
+            const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+              snapshot.value,
+              trigger.rangeEnd,
+              replacement,
+            );
+            const applied = applyPromptReplacement(
+              trigger.rangeStart,
+              replacementRangeEnd,
+              replacement,
+              { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+            );
+            if (applied) {
+              setComposerHighlightedItemId(null);
+            }
+            return;
+          }
           void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
           const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
             expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
