@@ -119,6 +119,21 @@ export const ObservabilitySettings = Schema.Struct({
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
 
+export const WeavePlannerSettings = Schema.Struct({
+  provider: ProviderKind.pipe(
+    Schema.withDecodingDefault(Effect.succeed("claudeAgent" as const satisfies ProviderKind)),
+  ),
+  modelSelection: ModelSelection.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        provider: "claudeAgent" as const,
+        model: "claude-sonnet-4-6",
+      }),
+    ),
+  ),
+});
+export type WeavePlannerSettings = typeof WeavePlannerSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   defaultThreadEnvMode: ThreadEnvMode.pipe(
@@ -142,6 +157,9 @@ export const ServerSettings = Schema.Struct({
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  weave: Schema.Struct({
+    planner: WeavePlannerSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 

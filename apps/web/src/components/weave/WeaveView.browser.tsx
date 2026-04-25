@@ -139,6 +139,7 @@ function createBaseSnapshot(): OrchestrationReadModel {
         title: "weave test thread",
         modelSelection: { provider: "codex", model: "gpt-5" },
         interactionMode: "default",
+        kind: "chat",
         runtimeMode: "full-access",
         branch: "main",
         worktreePath: null,

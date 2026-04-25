@@ -916,6 +916,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 modelSelection: row.modelSelection,
                 runtimeMode: row.runtimeMode,
                 interactionMode: row.interactionMode,
+                // kind column is added by Task 2 migration; default to "chat" until then
+                kind: "chat" as const,
                 branch: row.branch,
                 worktreePath: row.worktreePath,
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,

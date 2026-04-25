@@ -1410,6 +1410,7 @@ function applyEnvironmentOrchestrationEvent(
           modelSelection: event.payload.modelSelection,
           runtimeMode: event.payload.runtimeMode,
           interactionMode: event.payload.interactionMode,
+          kind: "chat",
           branch: event.payload.branch,
           worktreePath: event.payload.worktreePath,
           latestTurn: null,

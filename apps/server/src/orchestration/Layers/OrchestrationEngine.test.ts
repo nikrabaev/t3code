@@ -125,6 +125,7 @@ describe("OrchestrationEngine", () => {
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          kind: "chat" as const,
           runtimeMode: "full-access" as const,
           branch: null,
           worktreePath: null,

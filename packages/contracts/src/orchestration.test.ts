@@ -6,6 +6,7 @@ import {
   AggregateRef,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
+  DEFAULT_THREAD_KIND,
   OrchestrationAggregateKind,
   OrchestrationCommand,
   OrchestrationEvent,
@@ -14,6 +15,7 @@ import {
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationShellStreamEvent,
+  OrchestrationThread,
   OrchestrationWeaveRunShell,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
@@ -977,5 +979,59 @@ it.effect("OrchestrationShellStreamEvent decodes weave-run-removed", () =>
       weaveRunId: "run-1",
     });
     assert.strictEqual(decoded.kind, "weave-run-removed");
+  }),
+);
+
+const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
+
+it.effect("OrchestrationThread defaults kind to 'chat' when omitted", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-25T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationThread({
+      id: "thread-1",
+      projectId: "project-1",
+      title: "Test thread",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      runtimeMode: "full-access",
+      branch: null,
+      worktreePath: null,
+      latestTurn: null,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      messages: [],
+      proposedPlans: [],
+      activities: [],
+      checkpoints: [],
+      session: null,
+    });
+    assert.strictEqual(decoded.kind, DEFAULT_THREAD_KIND);
+    assert.strictEqual(decoded.kind, "chat");
+  }),
+);
+
+it.effect("OrchestrationThread round-trips kind: 'planner'", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-25T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationThread({
+      id: "thread-2",
+      projectId: "project-1",
+      title: "Planner thread",
+      modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      runtimeMode: "full-access",
+      kind: "planner",
+      branch: null,
+      worktreePath: null,
+      latestTurn: null,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      messages: [],
+      proposedPlans: [],
+      activities: [],
+      checkpoints: [],
+      session: null,
+    });
+    assert.strictEqual(decoded.kind, "planner");
   }),
 );
