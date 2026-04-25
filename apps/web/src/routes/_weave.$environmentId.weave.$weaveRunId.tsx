@@ -1,6 +1,7 @@
 import type { EnvironmentId, WeaveRunId } from "@t3tools/contracts";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { WeaveView } from "../components/weave/WeaveView";
+import { SidebarInset } from "../components/ui/sidebar";
 import { parseWeaveRouteSearch } from "../weave/weaveRouteSearch";
 
 export const Route = createFileRoute("/_weave/$environmentId/weave/$weaveRunId")({
@@ -13,9 +14,11 @@ function WeaveRouteComponent() {
     from: "/_weave/$environmentId/weave/$weaveRunId",
   });
   return (
-    <WeaveView
-      environmentId={environmentId as EnvironmentId}
-      weaveRunId={weaveRunId as WeaveRunId}
-    />
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
+      <WeaveView
+        environmentId={environmentId as EnvironmentId}
+        weaveRunId={weaveRunId as WeaveRunId}
+      />
+    </SidebarInset>
   );
 }

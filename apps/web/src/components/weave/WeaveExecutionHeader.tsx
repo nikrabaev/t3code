@@ -12,12 +12,12 @@ export function WeaveExecutionHeader({ shell }: WeaveExecutionHeaderProps) {
     shell.verifiedCount +
     shell.failedCount;
   return (
-    <header className="border-b border-border flex items-center justify-between px-6 py-4">
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl font-semibold">{shell.title}</h1>
-        <span className="text-sm text-muted-foreground">{shell.status}</span>
+    <header className="border-b border-border flex items-center justify-between gap-4 px-6 py-4 min-w-0">
+      <div className="flex items-center gap-4 min-w-0 flex-1">
+        <h1 className="text-xl font-semibold truncate min-w-0">{shell.title}</h1>
+        <span className="text-sm text-muted-foreground shrink-0">{shell.status}</span>
       </div>
-      <div className="flex items-center gap-6 text-xs">
+      <div className="flex items-center gap-6 text-xs shrink-0">
         <Stat label="Verified" value={shell.verifiedCount} color="text-green-600" />
         <Stat label="Running" value={shell.runningCount} color="text-amber-600" />
         <Stat label="Ready" value={shell.readyCount} color="text-blue-600" />
