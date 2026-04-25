@@ -935,6 +935,21 @@ it.effect("round-trips WeaveNodeMeta with status failed + failedAt + failureReas
   }),
 );
 
+it.effect("round-trips WeaveNodeMeta with status verified + dispatchedAt + verifiedAt", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeMeta({
+      status: "verified",
+      dispatchedAt: "2026-04-25T10:00:00.000Z",
+      verifiedAt: "2026-04-25T11:00:00.000Z",
+    });
+    assert.strictEqual(parsed.status, "verified");
+    assert.strictEqual(parsed.dispatchedAt, "2026-04-25T10:00:00.000Z");
+    assert.strictEqual(parsed.verifiedAt, "2026-04-25T11:00:00.000Z");
+    assert.strictEqual(parsed.failedAt, undefined);
+    assert.strictEqual(parsed.failureReason, undefined);
+  }),
+);
+
 it.effect("round-trips WeaveRunProjectionSchema with empty nodeMeta", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWeaveRunProjection({
