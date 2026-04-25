@@ -95,20 +95,40 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
   it("does not re-retain when the thread ids are the same (stable join key)", () => {
     // The hook depends on `joinKey = ids.join("|")`. If the content does not
     // change, the effect does not re-run even if a fresh array is passed in.
-    // We verify this by checking that calling runEffect with the same logical
-    // set but different array references does not add subscriptions if the
-    // previous cleanup has not been called (i.e., React skipped the re-run).
-    const cleanup = runEffect(ENV, [T1, T2]);
-    const initialCallCount = (retainThreadDetailSubscription as ReturnType<typeof vi.fn>).mock.calls
-      .length;
+    //
+    // Approach A: we wrap runEffect with the same dep-equality gate React uses.
+    // Two renders pass in different array *references* but identical *content*.
+    // The guard skips the second invocation, so retain stays at 2 total.
+    let previousJoinKey: string | undefined;
+    let currentCleanup: (() => void) | undefined;
 
-    // A rerender with a different array reference but identical sorted content
-    // does NOT trigger the effect — React compares the joinKey dep, which is
-    // unchanged. We simulate this by checking that we do not call runEffect
-    // again (the hook guards via joinKey).
-    expect(initialCallCount).toBe(2);
+    function runEffectWithDepGate(
+      environmentId: EnvironmentId,
+      runningChildThreadIds: ReadonlyArray<ThreadId>,
+    ): (() => void) | undefined {
+      const joinKey = runningChildThreadIds.join("|");
+      if (joinKey === previousJoinKey) {
+        // Same dep value — React would skip re-running the effect.
+        return undefined;
+      }
+      // Dep changed — run cleanup from previous render then run new effect.
+      currentCleanup?.();
+      previousJoinKey = joinKey;
+      currentCleanup = runEffect(environmentId, runningChildThreadIds);
+      return currentCleanup;
+    }
 
-    cleanup();
+    // First render: [T1, T2] — effect runs, 2 retains.
+    runEffectWithDepGate(ENV, [T1, T2]);
+    expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(2);
+
+    // Second render: fresh array ref but identical content — effect must NOT run.
+    const secondResult = runEffectWithDepGate(ENV, [T1, T2] as ThreadId[]);
+    expect(secondResult).toBeUndefined(); // gate blocked the re-run
+    expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(2); // still 2, not 4
+
+    // Cleanup after unmount.
+    currentCleanup?.();
   });
 
   it("retains no subscriptions when the running set is empty", () => {
