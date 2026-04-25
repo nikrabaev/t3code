@@ -16,6 +16,7 @@ import {
   OrchestrationShellSnapshot,
   OrchestrationShellStreamEvent,
   OrchestrationThread,
+  OrchestrationThreadShell,
   OrchestrationWeaveRunShell,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
@@ -1031,6 +1032,58 @@ it.effect("OrchestrationThread round-trips kind: 'planner'", () =>
       activities: [],
       checkpoints: [],
       session: null,
+    });
+    assert.strictEqual(decoded.kind, "planner");
+  }),
+);
+
+const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(OrchestrationThreadShell);
+
+it.effect("OrchestrationThreadShell defaults kind to 'chat' when omitted", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-25T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationThreadShell({
+      id: "thread-1",
+      projectId: "project-1",
+      title: "Test thread shell",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      runtimeMode: "full-access",
+      branch: null,
+      worktreePath: null,
+      latestTurn: null,
+      createdAt: now,
+      updatedAt: now,
+      session: null,
+      latestUserMessageAt: null,
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      hasActionableProposedPlan: false,
+    });
+    assert.strictEqual(decoded.kind, DEFAULT_THREAD_KIND);
+    assert.strictEqual(decoded.kind, "chat");
+  }),
+);
+
+it.effect("OrchestrationThreadShell round-trips kind: 'planner'", () =>
+  Effect.gen(function* () {
+    const now = "2026-04-25T00:00:00.000Z";
+    const decoded = yield* decodeOrchestrationThreadShell({
+      id: "thread-2",
+      projectId: "project-1",
+      title: "Planner thread shell",
+      modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      runtimeMode: "full-access",
+      kind: "planner",
+      branch: null,
+      worktreePath: null,
+      latestTurn: null,
+      createdAt: now,
+      updatedAt: now,
+      session: null,
+      latestUserMessageAt: null,
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      hasActionableProposedPlan: false,
     });
     assert.strictEqual(decoded.kind, "planner");
   }),

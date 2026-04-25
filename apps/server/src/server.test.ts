@@ -181,6 +181,7 @@ const makeDefaultOrchestrationThreadShell = (
     modelSelection: defaultModelSelection,
     runtimeMode: "full-access",
     interactionMode: "default",
+    kind: "chat",
     branch: null,
     worktreePath: null,
     latestTurn: null,

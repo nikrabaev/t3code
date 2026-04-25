@@ -298,6 +298,7 @@ function mapThreadShell(
     projectId: thread.projectId,
     title: thread.title,
     interactionMode: thread.interactionMode,
+    kind: thread.kind,
     session,
     createdAt: thread.createdAt,
     archivedAt: thread.archivedAt,
@@ -1930,7 +1931,9 @@ export function selectSidebarThreadsAcrossEnvironments(state: AppState): Sidebar
   return getEnvironmentEntries(state).flatMap(([environmentId, environmentState]) =>
     environmentState.threadIds.flatMap((threadId) => {
       const thread = environmentState.sidebarThreadSummaryById[threadId];
-      return thread && thread.environmentId === environmentId ? [thread] : [];
+      return thread && thread.environmentId === environmentId && thread.kind !== "planner"
+        ? [thread]
+        : [];
     }),
   );
 }
@@ -1947,7 +1950,7 @@ export function selectSidebarThreadsForProjectRef(
   const threadIds = environmentState.threadIdsByProjectId[ref.projectId] ?? EMPTY_THREAD_IDS;
   return threadIds.flatMap((threadId) => {
     const thread = environmentState.sidebarThreadSummaryById[threadId];
-    return thread ? [thread] : [];
+    return thread && thread.kind !== "planner" ? [thread] : [];
   });
 }
 

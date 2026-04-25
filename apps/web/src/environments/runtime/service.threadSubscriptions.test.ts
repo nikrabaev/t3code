@@ -103,6 +103,7 @@ function makeThreadShellSnapshot(params: {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        kind: "chat",
         branch: null,
         worktreePath: null,
         latestTurn:
