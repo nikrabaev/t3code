@@ -13,11 +13,13 @@ function WeaveRouteComponent() {
   const { environmentId, weaveRunId } = useParams({
     from: "/_weave/$environmentId/weave/$weaveRunId",
   });
+  const { node: openNodeId } = Route.useSearch();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <WeaveView
         environmentId={environmentId as EnvironmentId}
         weaveRunId={weaveRunId as WeaveRunId}
+        openNodeId={openNodeId}
       />
     </SidebarInset>
   );

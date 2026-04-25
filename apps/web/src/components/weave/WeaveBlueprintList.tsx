@@ -126,8 +126,9 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
                     dependsOnStatuses={dependsOnStatuses}
                     onClick={() =>
                       void navigate({
-                        to: "/$environmentId/weave/$weaveRunId/node/$nodeId",
-                        params: { environmentId, weaveRunId, nodeId: node.id },
+                        to: "/$environmentId/weave/$weaveRunId",
+                        params: { environmentId, weaveRunId },
+                        search: { node: node.id },
                       })
                     }
                   />

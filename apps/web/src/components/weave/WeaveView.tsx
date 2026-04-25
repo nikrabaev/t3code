@@ -13,7 +13,7 @@ import { WeaveCompletionBanner } from "./WeaveCompletionBanner";
 export interface WeaveViewProps {
   readonly environmentId: EnvironmentId;
   readonly weaveRunId: WeaveRunId;
-  readonly openNodeId?: WeaveNodeId;
+  readonly openNodeId?: WeaveNodeId | undefined;
 }
 
 export function WeaveView(props: WeaveViewProps) {

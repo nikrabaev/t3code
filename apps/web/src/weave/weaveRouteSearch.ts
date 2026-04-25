@@ -1,9 +1,16 @@
-// v0.1 search params for the weave run view. Inspector-open-to-node-id is carried in the nested
-// /node/$nodeId route, not in search — but keep a `tab` param reserved for future drill-downs.
-// Currently empty; reserved for future drill-down params.
+import type { WeaveNodeId } from "@t3tools/contracts";
 
-export interface WeaveRouteSearch {}
+// v0.1 search params for the weave run view. `node` carries the inspector
+// open-node id so it can be set/cleared without changing path params.
 
-export function parseWeaveRouteSearch(_search: Record<string, unknown>): WeaveRouteSearch {
+export interface WeaveRouteSearch {
+  readonly node?: WeaveNodeId;
+}
+
+export function parseWeaveRouteSearch(search: Record<string, unknown>): WeaveRouteSearch {
+  const node = search.node;
+  if (typeof node === "string" && node.length > 0) {
+    return { node: node as WeaveNodeId };
+  }
   return {};
 }
