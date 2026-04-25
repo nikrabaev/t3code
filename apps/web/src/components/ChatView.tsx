@@ -20,6 +20,7 @@ import {
   RuntimeMode,
   TerminalOpenInput,
   WeaveRunId,
+  type WeaveRunProjection,
 } from "@t3tools/contracts";
 import {
   parseScopedThreadKey,
@@ -187,6 +188,7 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROPOSED_PLANS: Thread["proposedPlans"] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+const EMPTY_WEAVE_RUN_DETAILS: WeaveRunProjection[] = [];
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
 
@@ -854,13 +856,17 @@ export default function ChatView(props: ChatViewProps) {
   // render WeaveCreatedMarker banners at the bottom of the thread.
   // Option (c) from the plan: no per-message anchoring; banner at bottom only.
   // parentThreadId lives on the detail projection's run.parentThreadId.
-  const weaveRunsForThread = useStore(
+  // Return the underlying detail projections (stable references) rather
+  // than mapping into fresh { id, title } wrappers — useShallow only does
+  // top-level array equality, and new wrapper objects each render would
+  // break shallow equality and trigger an infinite re-render loop.
+  const weaveRunDetailsForThread = useStore(
     useShallow((state: AppState) => {
       const envState = state.environmentStateById[environmentId];
-      if (!envState || !threadId) return [] as Array<{ id: WeaveRunId; title: string }>;
-      return Object.values(envState.weaveRunDetailById)
-        .filter((detail) => detail.run.parentThreadId === threadId)
-        .map((detail) => ({ id: detail.run.id, title: detail.run.title }));
+      if (!envState || !threadId) return EMPTY_WEAVE_RUN_DETAILS;
+      return Object.values(envState.weaveRunDetailById).filter(
+        (detail) => detail.run.parentThreadId === threadId,
+      );
     }),
   );
 
@@ -3357,14 +3363,14 @@ export default function ChatView(props: ChatViewProps) {
             {/* Weave run markers — rendered at the bottom of the thread for
                 every weave run compiled from this thread. Option (c) per plan:
                 no per-message anchor in v0.1; anchor-to-message deferred to v0.3. */}
-            {weaveRunsForThread.length > 0 && (
+            {weaveRunDetailsForThread.length > 0 && (
               <div>
-                {weaveRunsForThread.map((run) => (
+                {weaveRunDetailsForThread.map((detail) => (
                   <WeaveCreatedMarker
-                    key={run.id}
+                    key={detail.run.id}
                     environmentId={environmentId}
-                    weaveRunId={run.id}
-                    title={run.title}
+                    weaveRunId={detail.run.id}
+                    title={detail.run.title}
                   />
                 ))}
               </div>
