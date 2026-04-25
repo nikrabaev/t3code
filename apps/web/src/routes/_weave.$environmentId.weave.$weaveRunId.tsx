@@ -3,14 +3,14 @@ import { createFileRoute, useParams } from "@tanstack/react-router";
 import { WeaveView } from "../components/weave/WeaveView";
 import { parseWeaveRouteSearch } from "../weave/weaveRouteSearch";
 
-export const Route = createFileRoute("/_weave/$environmentId/$weaveRunId")({
+export const Route = createFileRoute("/_weave/$environmentId/weave/$weaveRunId")({
   validateSearch: (search) => parseWeaveRouteSearch(search),
   component: WeaveRouteComponent,
 });
 
 function WeaveRouteComponent() {
   const { environmentId, weaveRunId } = useParams({
-    from: "/_weave/$environmentId/$weaveRunId",
+    from: "/_weave/$environmentId/weave/$weaveRunId",
   });
   return (
     <WeaveView

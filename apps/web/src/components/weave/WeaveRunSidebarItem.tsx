@@ -18,7 +18,7 @@ export function WeaveRunSidebarItem({ environmentId, weaveRun, active }: WeaveRu
   const done = weaveRun.verifiedCount;
   return (
     <Link
-      to="/$environmentId/$weaveRunId"
+      to="/$environmentId/weave/$weaveRunId"
       params={{ environmentId, weaveRunId: weaveRun.id }}
       className={cn(
         "flex items-center gap-2 px-3 py-2 border-l-2 border-cyan-500",

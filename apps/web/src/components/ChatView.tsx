@@ -2462,7 +2462,7 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
       await navigate({
-        to: "/$environmentId/$weaveRunId",
+        to: "/$environmentId/weave/$weaveRunId",
         params: { environmentId, weaveRunId },
       });
       return;

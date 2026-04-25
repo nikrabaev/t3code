@@ -17,10 +17,10 @@ import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
-import { Route as WeaveEnvironmentIdWeaveRunIdRouteImport } from './routes/_weave.$environmentId.$weaveRunId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
-import { Route as WeaveEnvironmentIdWeaveRunIdNodeNodeIdRouteImport } from './routes/_weave.$environmentId.$weaveRunId.node.$nodeId'
+import { Route as WeaveEnvironmentIdWeaveWeaveRunIdRouteImport } from './routes/_weave.$environmentId.weave.$weaveRunId'
+import { Route as WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRouteImport } from './routes/_weave.$environmentId.weave.$weaveRunId.node.$nodeId'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -60,12 +60,6 @@ const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
   path: '/archived',
   getParentRoute: () => SettingsRoute,
 } as any)
-const WeaveEnvironmentIdWeaveRunIdRoute =
-  WeaveEnvironmentIdWeaveRunIdRouteImport.update({
-    id: '/$environmentId/$weaveRunId',
-    path: '/$environmentId/$weaveRunId',
-    getParentRoute: () => WeaveRoute,
-  } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
@@ -77,11 +71,17 @@ const ChatEnvironmentIdThreadIdRoute =
     path: '/$environmentId/$threadId',
     getParentRoute: () => ChatRoute,
   } as any)
-const WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute =
-  WeaveEnvironmentIdWeaveRunIdNodeNodeIdRouteImport.update({
+const WeaveEnvironmentIdWeaveWeaveRunIdRoute =
+  WeaveEnvironmentIdWeaveWeaveRunIdRouteImport.update({
+    id: '/$environmentId/weave/$weaveRunId',
+    path: '/$environmentId/weave/$weaveRunId',
+    getParentRoute: () => WeaveRoute,
+  } as any)
+const WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute =
+  WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRouteImport.update({
     id: '/node/$nodeId',
     path: '/node/$nodeId',
-    getParentRoute: () => WeaveEnvironmentIdWeaveRunIdRoute,
+    getParentRoute: () => WeaveEnvironmentIdWeaveWeaveRunIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -93,8 +93,8 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/$environmentId/$weaveRunId': typeof WeaveEnvironmentIdWeaveRunIdRouteWithChildren
-  '/$environmentId/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute
+  '/$environmentId/weave/$weaveRunId': typeof WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren
+  '/$environmentId/weave/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
@@ -105,8 +105,8 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/$environmentId/$weaveRunId': typeof WeaveEnvironmentIdWeaveRunIdRouteWithChildren
-  '/$environmentId/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute
+  '/$environmentId/weave/$weaveRunId': typeof WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren
+  '/$environmentId/weave/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -120,8 +120,8 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
-  '/_weave/$environmentId/$weaveRunId': typeof WeaveEnvironmentIdWeaveRunIdRouteWithChildren
-  '/_weave/$environmentId/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute
+  '/_weave/$environmentId/weave/$weaveRunId': typeof WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren
+  '/_weave/$environmentId/weave/$weaveRunId/node/$nodeId': typeof WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -134,8 +134,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
-    | '/$environmentId/$weaveRunId'
-    | '/$environmentId/$weaveRunId/node/$nodeId'
+    | '/$environmentId/weave/$weaveRunId'
+    | '/$environmentId/weave/$weaveRunId/node/$nodeId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -146,8 +146,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
-    | '/$environmentId/$weaveRunId'
-    | '/$environmentId/$weaveRunId/node/$nodeId'
+    | '/$environmentId/weave/$weaveRunId'
+    | '/$environmentId/weave/$weaveRunId/node/$nodeId'
   id:
     | '__root__'
     | '/_chat'
@@ -160,8 +160,8 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
-    | '/_weave/$environmentId/$weaveRunId'
-    | '/_weave/$environmentId/$weaveRunId/node/$nodeId'
+    | '/_weave/$environmentId/weave/$weaveRunId'
+    | '/_weave/$environmentId/weave/$weaveRunId/node/$nodeId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -229,13 +229,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsArchivedRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/_weave/$environmentId/$weaveRunId': {
-      id: '/_weave/$environmentId/$weaveRunId'
-      path: '/$environmentId/$weaveRunId'
-      fullPath: '/$environmentId/$weaveRunId'
-      preLoaderRoute: typeof WeaveEnvironmentIdWeaveRunIdRouteImport
-      parentRoute: typeof WeaveRoute
-    }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
       path: '/draft/$draftId'
@@ -250,12 +243,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoute
     }
-    '/_weave/$environmentId/$weaveRunId/node/$nodeId': {
-      id: '/_weave/$environmentId/$weaveRunId/node/$nodeId'
+    '/_weave/$environmentId/weave/$weaveRunId': {
+      id: '/_weave/$environmentId/weave/$weaveRunId'
+      path: '/$environmentId/weave/$weaveRunId'
+      fullPath: '/$environmentId/weave/$weaveRunId'
+      preLoaderRoute: typeof WeaveEnvironmentIdWeaveWeaveRunIdRouteImport
+      parentRoute: typeof WeaveRoute
+    }
+    '/_weave/$environmentId/weave/$weaveRunId/node/$nodeId': {
+      id: '/_weave/$environmentId/weave/$weaveRunId/node/$nodeId'
       path: '/node/$nodeId'
-      fullPath: '/$environmentId/$weaveRunId/node/$nodeId'
-      preLoaderRoute: typeof WeaveEnvironmentIdWeaveRunIdNodeNodeIdRouteImport
-      parentRoute: typeof WeaveEnvironmentIdWeaveRunIdRoute
+      fullPath: '/$environmentId/weave/$weaveRunId/node/$nodeId'
+      preLoaderRoute: typeof WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRouteImport
+      parentRoute: typeof WeaveEnvironmentIdWeaveWeaveRunIdRoute
     }
   }
 }
@@ -274,28 +274,28 @@ const ChatRouteChildren: ChatRouteChildren = {
 
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
-interface WeaveEnvironmentIdWeaveRunIdRouteChildren {
-  WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute: typeof WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute
+interface WeaveEnvironmentIdWeaveWeaveRunIdRouteChildren {
+  WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute: typeof WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute
 }
 
-const WeaveEnvironmentIdWeaveRunIdRouteChildren: WeaveEnvironmentIdWeaveRunIdRouteChildren =
+const WeaveEnvironmentIdWeaveWeaveRunIdRouteChildren: WeaveEnvironmentIdWeaveWeaveRunIdRouteChildren =
   {
-    WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute:
-      WeaveEnvironmentIdWeaveRunIdNodeNodeIdRoute,
+    WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute:
+      WeaveEnvironmentIdWeaveWeaveRunIdNodeNodeIdRoute,
   }
 
-const WeaveEnvironmentIdWeaveRunIdRouteWithChildren =
-  WeaveEnvironmentIdWeaveRunIdRoute._addFileChildren(
-    WeaveEnvironmentIdWeaveRunIdRouteChildren,
+const WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren =
+  WeaveEnvironmentIdWeaveWeaveRunIdRoute._addFileChildren(
+    WeaveEnvironmentIdWeaveWeaveRunIdRouteChildren,
   )
 
 interface WeaveRouteChildren {
-  WeaveEnvironmentIdWeaveRunIdRoute: typeof WeaveEnvironmentIdWeaveRunIdRouteWithChildren
+  WeaveEnvironmentIdWeaveWeaveRunIdRoute: typeof WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren
 }
 
 const WeaveRouteChildren: WeaveRouteChildren = {
-  WeaveEnvironmentIdWeaveRunIdRoute:
-    WeaveEnvironmentIdWeaveRunIdRouteWithChildren,
+  WeaveEnvironmentIdWeaveWeaveRunIdRoute:
+    WeaveEnvironmentIdWeaveWeaveRunIdRouteWithChildren,
 }
 
 const WeaveRouteWithChildren = WeaveRoute._addFileChildren(WeaveRouteChildren)

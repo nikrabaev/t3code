@@ -13,7 +13,7 @@ export function WeaveCreatedMarker({ environmentId, weaveRunId, title }: WeaveCr
       <span className="text-cyan-600">◇</span>
       <span className="text-sm">Compiled a Weave: </span>
       <Link
-        to="/$environmentId/$weaveRunId"
+        to="/$environmentId/weave/$weaveRunId"
         params={{ environmentId, weaveRunId }}
         className="text-sm font-medium hover:underline"
       >

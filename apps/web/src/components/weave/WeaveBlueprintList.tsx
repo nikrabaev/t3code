@@ -10,7 +10,7 @@ export interface WeaveBlueprintListProps {
 export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListProps) {
   const navigate = useNavigate();
   const { environmentId, weaveRunId } = useParams({
-    from: "/_weave/$environmentId/$weaveRunId",
+    from: "/_weave/$environmentId/weave/$weaveRunId",
   });
   const blueprint = detail.currentBlueprint!;
 
@@ -36,7 +36,7 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
                   selected={openNodeId === node.id}
                   onClick={() =>
                     void navigate({
-                      to: "/$environmentId/$weaveRunId/node/$nodeId",
+                      to: "/$environmentId/weave/$weaveRunId/node/$nodeId",
                       params: { environmentId, weaveRunId, nodeId: node.id },
                     })
                   }
