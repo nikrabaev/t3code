@@ -35,6 +35,8 @@ import {
   WeaveNodeDispatchedPayload,
   WeaveNodeFailedCommand,
   WeaveNodeFailedPayload,
+  WeaveNodeRetryCommand,
+  WeaveNodeRetryRequestedPayload,
   WeaveNodeVerifiedCommand,
   WeaveNodeVerifiedPayload,
   WeavePhaseApproveCommand,
@@ -723,6 +725,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveNodeRetryCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -750,6 +753,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveNodeRetryCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -870,6 +874,7 @@ export const OrchestrationEventType = Schema.Literals([
   "weave.node-dispatched",
   "weave.node-verified",
   "weave.node-failed",
+  "weave.node-retry-requested",
   "weave.decision-resolved",
   "weave.phase-approved",
   "weave.exited",
@@ -1226,6 +1231,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("weave.node-failed"),
     payload: WeaveNodeFailedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.node-retry-requested"),
+    payload: WeaveNodeRetryRequestedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

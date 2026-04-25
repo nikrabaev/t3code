@@ -223,6 +223,7 @@ export function projectWeaveEvent(
         status: "failed",
         failedAt: payload.occurredAt,
         failureReason: payload.reason,
+        ...(payload.failureOutput !== undefined ? { failureOutput: payload.failureOutput } : {}),
       });
       return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
@@ -291,6 +292,35 @@ export function projectWeaveEvent(
         );
       }
       return Effect.succeed(state);
+    }
+    case "weave.node-retry-requested": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.node-retry-requested requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeMeta = new Map(state.nodeMeta);
+      const prevMeta = nextNodeMeta.get(payload.nodeId);
+      // Reset failure fields and flip status back to "running" so the conformer
+      // (which subscribes to this event) re-runs the verifier in the existing
+      // worktree. Keep dispatchedAt so the elapsed clock keeps showing total
+      // time including retries.
+      const {
+        failureReason: _droppedReason,
+        failureOutput: _droppedOutput,
+        failedAt: _droppedFailedAt,
+        verifiedAt: _droppedVerifiedAt,
+        ...rest
+      } = prevMeta ?? { status: "pending" as const };
+      nextNodeMeta.set(payload.nodeId, {
+        ...rest,
+        status: "running",
+      });
+      return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
     default: {
       const _exhaustive: never = event;

@@ -291,6 +291,9 @@ export function decideWeaveCommand(input: {
               weaveRunId: command.weaveRunId,
               nodeId: command.nodeId,
               reason: command.reason,
+              ...(command.failureOutput !== undefined
+                ? { failureOutput: command.failureOutput }
+                : {}),
               occurredAt: command.createdAt,
             },
           }),
@@ -367,6 +370,31 @@ export function decideWeaveCommand(input: {
           );
         }
         return results;
+      });
+    }
+    case "weave.node.retry": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+        yield* requireNodeStatus({
+          projection: run,
+          command,
+          nodeId: command.nodeId,
+          allowed: ["failed"],
+        });
+        return [
+          envelope({
+            type: "weave.node-retry-requested",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              nodeId: command.nodeId,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
       });
     }
     default: {

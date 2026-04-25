@@ -255,6 +255,18 @@ export const WeaveExitCommand = Schema.Struct({
   reason: WeaveExitReason,
   createdAt: IsoDateTime,
 });
+
+// Re-runs the verifier for a failed node without re-dispatching the agent.
+// The existing child thread + worktree are reused; only the verifier runs
+// again (status flips back to "running" while the verifier executes).
+export const WeaveNodeRetryCommand = Schema.Struct({
+  type: Schema.Literal("weave.node.retry"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  createdAt: IsoDateTime,
+});
+export type WeaveNodeRetryCommand = typeof WeaveNodeRetryCommand.Type;
 export type WeaveExitCommand = typeof WeaveExitCommand.Type;
 
 export const WeaveDispatchableCommand = Schema.Union([
@@ -263,6 +275,7 @@ export const WeaveDispatchableCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveNodeRetryCommand,
 ]);
 export type WeaveDispatchableCommand = typeof WeaveDispatchableCommand.Type;
 
@@ -309,6 +322,10 @@ export const WeaveNodeFailedCommand = Schema.Struct({
   weaveRunId: WeaveRunId,
   nodeId: WeaveNodeId,
   reason: Schema.String,
+  // Captured stdout+stderr from the verifier process (or any caller's chosen
+  // detail), used by the inspector to surface the full failure context. May
+  // be truncated by the producer; the prefix `[truncated]\n` is conventional.
+  failureOutput: Schema.optional(Schema.String),
   createdAt: IsoDateTime,
 });
 export type WeaveNodeFailedCommand = typeof WeaveNodeFailedCommand.Type;
@@ -383,9 +400,17 @@ export const WeaveNodeFailedPayload = Schema.Struct({
   weaveRunId: WeaveRunId,
   nodeId: WeaveNodeId,
   reason: Schema.String,
+  failureOutput: Schema.optional(Schema.String),
   occurredAt: IsoDateTime,
 });
 export type WeaveNodeFailedPayload = typeof WeaveNodeFailedPayload.Type;
+
+export const WeaveNodeRetryRequestedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  occurredAt: IsoDateTime,
+});
+export type WeaveNodeRetryRequestedPayload = typeof WeaveNodeRetryRequestedPayload.Type;
 
 export const WeaveDecisionResolvedPayload = Schema.Struct({
   weaveRunId: WeaveRunId,
@@ -431,6 +456,10 @@ export const WeaveNodeMeta = Schema.Struct({
   verifiedAt: Schema.optional(IsoDateTime),
   failedAt: Schema.optional(IsoDateTime),
   failureReason: Schema.optional(Schema.String),
+  // Verifier process output (stdout+stderr, possibly truncated). Set when the
+  // verifier failure includes a captured process output; absent for manual
+  // failures or when the runtime did not produce output.
+  failureOutput: Schema.optional(Schema.String),
 });
 export type WeaveNodeMeta = typeof WeaveNodeMeta.Type;
 

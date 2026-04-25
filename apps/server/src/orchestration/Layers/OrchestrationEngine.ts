@@ -73,6 +73,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "weave.node.dispatch":
     case "weave.node.verified":
     case "weave.node.failed":
+    case "weave.node.retry":
       return {
         aggregateKind: "weave",
         aggregateId: command.weaveRunId,
