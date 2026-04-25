@@ -692,6 +692,7 @@ export function projectEvent(
     case "weave.node-dispatched":
     case "weave.node-verified":
     case "weave.node-failed":
+    case "weave.node-retry-requested":
     case "weave.decision-resolved":
     case "weave.phase-approved":
     case "weave.exited": {
