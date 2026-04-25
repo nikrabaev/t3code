@@ -23,49 +23,62 @@ export function WeaveView(props: WeaveViewProps) {
 
   if (!shell) return <div className="p-8 text-muted-foreground">Loading weave run…</div>;
 
+  const inspectorOpen = props.openNodeId !== undefined && detail !== null;
+  const blueprint = detail?.currentBlueprint ?? null;
+  const isTerminal = shell.status === "complete" || shell.status === "aborted";
+
   return (
-    <div className="grid grid-cols-[320px_1fr_400px] h-full">
+    <div
+      className={`grid h-full min-h-0 ${
+        inspectorOpen ? "grid-cols-[320px_1fr_400px]" : "grid-cols-[320px_1fr]"
+      }`}
+    >
       {/* Left: chat sidebar — placeholder in v0.1 */}
-      <aside className="border-r border-border p-4">
+      <aside className="border-r border-border p-4 overflow-y-auto">
         <div className="text-xs text-muted-foreground">Intake conversation (coming in v0.3)</div>
       </aside>
 
       {/* Center: canvas */}
-      <main className="flex flex-col overflow-y-auto">
+      <main className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
         <WeaveExecutionHeader shell={shell} />
         {shell.status === "complete" && (
           <WeaveCompletionBanner environmentId={props.environmentId} weaveRunId={shell.id} />
         )}
-        {shell.status === "draft" && <WeaveIntakeView />}
-        {shell.status === "reviewing" && detail?.currentBlueprint && (
+        {/* Pre-blueprint states: planner still compiling. */}
+        {!blueprint && !isTerminal && <WeaveIntakeView />}
+        {/* Terminal-without-blueprint (e.g., run aborted before planner finished). */}
+        {!blueprint && isTerminal && (
+          <div className="p-8 text-sm text-muted-foreground">
+            This Weave run ended ({shell.status}) before a Blueprint was compiled.
+          </div>
+        )}
+        {/* Reviewing: approve callout + list. */}
+        {blueprint && shell.status === "reviewing" && (
           <>
             <WeaveApproveCallout
               environmentId={props.environmentId}
               weaveRunId={shell.id}
-              blueprint={detail.currentBlueprint}
+              blueprint={blueprint}
             />
-            <WeaveBlueprintList detail={detail} openNodeId={props.openNodeId} />
+            <WeaveBlueprintList detail={detail!} openNodeId={props.openNodeId} />
           </>
         )}
-        {(shell.status === "running" ||
-          shell.status === "paused" ||
-          shell.status === "complete" ||
-          shell.status === "aborted") &&
-          detail?.currentBlueprint && (
-            <WeaveBlueprintList detail={detail} openNodeId={props.openNodeId} />
-          )}
+        {/* Running / paused / terminal-with-blueprint: list only. */}
+        {blueprint && shell.status !== "reviewing" && shell.status !== "draft" && (
+          <WeaveBlueprintList detail={detail!} openNodeId={props.openNodeId} />
+        )}
       </main>
 
-      {/* Right: inspector */}
-      <aside className="border-l border-border">
-        {props.openNodeId && detail && (
+      {/* Right: inspector — only mount the column when a node is selected. */}
+      {inspectorOpen && (
+        <aside className="border-l border-border min-h-0 overflow-hidden">
           <WeaveInspector
             environmentId={props.environmentId}
-            weaveRunDetail={detail}
-            openNodeId={props.openNodeId}
+            weaveRunDetail={detail!}
+            openNodeId={props.openNodeId!}
           />
-        )}
-      </aside>
+        </aside>
+      )}
     </div>
   );
 }
