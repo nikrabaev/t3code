@@ -387,7 +387,7 @@ describe("WeaveScheduler", () => {
     // GitCore should have been called once
     expect(stubGit.worktreeCalls).toHaveLength(1);
     expect(stubGit.worktreeCalls[0]?.cwd).toBe(FAKE_WORKSPACE_ROOT);
-    expect(stubGit.worktreeCalls[0]?.branch).toBe("main");
+    expect(stubGit.worktreeCalls[0]?.branch).toBe("HEAD");
     expect(stubGit.worktreeCalls[0]?.newBranch).toMatch(/^weave-/);
 
     // The weave run should have the node in "running" state (dispatched)

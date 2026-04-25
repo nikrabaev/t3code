@@ -184,10 +184,13 @@ const processSchedulerDecision = Effect.fn("WeaveScheduler.processSchedulerDecis
   // collisions between node IDs that share the same slug.
   const branchName = buildBranchName(runId, next.id);
 
-  // Allocate the worktree
+  // Allocate the worktree. Use HEAD as the base ref so the new branch is
+  // created from whatever the project's current branch is, regardless of
+  // its name (main / master / dev / anything else). The repo must have at
+  // least one commit; if not, createWorktree will surface a clear error.
   const worktreeResult = yield* git.createWorktree({
     cwd: workspaceRoot,
-    branch: "main", // v0.1: hardcoded (TODO: read project default branch in v0.2)
+    branch: "HEAD",
     newBranch: branchName,
     path: null,
   });
