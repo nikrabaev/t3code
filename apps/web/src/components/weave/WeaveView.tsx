@@ -1,11 +1,13 @@
 "use client";
 
+import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import type { EnvironmentId, WeaveNodeId, WeaveRunId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { cn } from "../../lib/utils";
 import { useWeaveRunShell, useWeaveRunDetail } from "../../weave/weaveStore";
 import { useWeaveRunDetailSubscription } from "../../environments/runtime/service";
 import { RIGHT_PANEL_SHEET_CLASS_NAME } from "../../rightPanelLayout";
-import { Sheet, SheetPopup } from "../ui/sheet";
+import { Sheet, SheetPortal } from "../ui/sheet";
 import { WeaveIntakeView } from "./WeaveIntakeView";
 import { WeaveBlueprintList } from "./WeaveBlueprintList";
 import { WeaveInspector } from "./WeaveInspector";
@@ -79,17 +81,35 @@ export function WeaveView(props: WeaveViewProps) {
         )}
       </main>
 
-      {/* Inspector overlay — slides over the page; backdrop / ESC dismisses. */}
+      {/* Inspector overlay — slides over the page; backdrop / ESC dismisses.
+          Composed manually (rather than using the shared SheetPopup wrapper) so
+          we can pass `forceRender` to the backdrop. base-ui's Dialog.Backdrop
+          suppresses itself when ancestor Dialog.Roots exist (e.g. the mobile
+          sidebar Sheet) — `forceRender` overrides that and ensures the backdrop
+          is visible whenever the inspector is open. */}
       <Sheet open={inspectorOpen} onOpenChange={handleInspectorOpenChange}>
-        <SheetPopup side="right" showCloseButton={false} className={RIGHT_PANEL_SHEET_CLASS_NAME}>
-          {detail && props.openNodeId !== undefined && (
-            <WeaveInspector
-              environmentId={props.environmentId}
-              weaveRunDetail={detail}
-              openNodeId={props.openNodeId}
-            />
-          )}
-        </SheetPopup>
+        <SheetPortal>
+          <SheetPrimitive.Backdrop
+            forceRender
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0"
+          />
+          <SheetPrimitive.Viewport className="fixed inset-0 z-50 flex justify-end">
+            <SheetPrimitive.Popup
+              className={cn(
+                "relative flex max-h-full min-h-0 w-full min-w-0 flex-col bg-popover text-popover-foreground shadow-lg/5 transition-[opacity,translate] duration-200 ease-in-out will-change-transform border-s data-ending-style:translate-x-8 data-ending-style:opacity-0 data-starting-style:translate-x-8 data-starting-style:opacity-0",
+                RIGHT_PANEL_SHEET_CLASS_NAME,
+              )}
+            >
+              {detail && props.openNodeId !== undefined && (
+                <WeaveInspector
+                  environmentId={props.environmentId}
+                  weaveRunDetail={detail}
+                  openNodeId={props.openNodeId}
+                />
+              )}
+            </SheetPrimitive.Popup>
+          </SheetPrimitive.Viewport>
+        </SheetPortal>
       </Sheet>
     </div>
   );
