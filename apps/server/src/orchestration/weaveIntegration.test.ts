@@ -148,6 +148,8 @@ function makeStubPlannerDriver(outputs: ReadonlyArray<string | Error>): Layer.La
     PlannerDriver,
     PlannerDriver.of({
       compile: (_input) => {
+        // _input now includes weaveRunId, projectId, parentThreadTitle,
+        // projectWorkspaceRoot, vision, snapshotContent, previousError
         const idx = callIndex++;
         const output = outputs[idx];
         if (output === undefined) {
@@ -260,6 +262,7 @@ async function createE2ESystem(testPrefix: string) {
 
   const plannerLayer = WeavePlannerLive.pipe(
     Layer.provide(weaveEngineLayer),
+    Layer.provide(orchestrationLayer),
     Layer.provide(stubPlannerDriverLayer),
   );
 

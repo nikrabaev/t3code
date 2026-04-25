@@ -82,6 +82,8 @@ function makeStubPlannerDriver(outputs: ReadonlyArray<string | Error>): Layer.La
     PlannerDriver,
     PlannerDriver.of({
       compile: (_input) => {
+        // _input now has weaveRunId, projectId, parentThreadTitle,
+        // projectWorkspaceRoot, vision, snapshotContent, previousError
         const idx = callIndex++;
         const output = outputs[idx];
         if (output === undefined) {
@@ -119,6 +121,7 @@ async function createPlannerSystem(
   const stubDriverLayer = makeStubPlannerDriver(stubDriverOutputs);
   const plannerLayer = WeavePlannerLive.pipe(
     Layer.provide(weaveEngineLayer),
+    Layer.provide(orchestrationLayer),
     Layer.provide(stubDriverLayer),
   );
 

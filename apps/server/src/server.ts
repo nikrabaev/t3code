@@ -66,7 +66,10 @@ import {
 } from "./auth/http.ts";
 import { ServerSecretStoreLive } from "./auth/Layers/ServerSecretStore.ts";
 import { ServerAuthLive } from "./auth/Layers/ServerAuth.ts";
-import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
+import {
+  OrchestrationLayerLive,
+  WeavePlannerWithRealDriverLive,
+} from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -225,6 +228,12 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
 );
 
 const RuntimeDependenciesLive = ReactorLayerLive.pipe(
+  // WeavePlannerWithRealDriverLive is at the earliest position so that it
+  // provides WeavePlanner to ReactorLayerLive (overriding the placeholder from
+  // OrchestrationLayerLive). Its deps (ProviderService, ServerSettingsService)
+  // are satisfied by ProviderRuntimeLayerLive and ServerSettingsLive which are
+  // provided further down the chain (later = more "outer" in Effect's pipe semantics).
+  Layer.provideMerge(WeavePlannerWithRealDriverLive),
   // Core Services
   Layer.provideMerge(CheckpointingLayerLive),
   Layer.provideMerge(GitLayerLive),

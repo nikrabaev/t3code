@@ -7,6 +7,7 @@ import { OrchestrationEngineLive } from "./Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./Layers/ProjectionSnapshotQuery.ts";
 import { PlannerDriverLive } from "./Layers/PlannerDriver.ts";
+import { PlannerDriverPlaceholderLive } from "./Layers/PlannerDriverPlaceholder.ts";
 import { ProcessRunnerLive } from "./Layers/ProcessRunner.ts";
 import { RuntimeReceiptBusLive } from "./Layers/RuntimeReceiptBus.ts";
 import { WeaveContractConformerLive } from "./Layers/WeaveContractConformer.ts";
@@ -35,9 +36,14 @@ const OrchestrationEngineFull = OrchestrationEngineLive.pipe(
 
 const WeaveEngineFull = WeaveEngineLive.pipe(Layer.provide(OrchestrationEngineFull));
 
+// WeavePlannerFull uses the placeholder driver so that OrchestrationLayerLive
+// remains self-contained (no external ProviderService / ServerSettingsService
+// requirements). In the full server runtime server.ts overrides this by providing
+// PlannerDriverFullLive before OrchestrationLayerLive in its composition chain.
 const WeavePlannerFull = WeavePlannerLive.pipe(
   Layer.provide(WeaveEngineFull),
-  Layer.provide(PlannerDriverLive),
+  Layer.provide(OrchestrationEngineFull),
+  Layer.provide(PlannerDriverPlaceholderLive),
 );
 
 const WeaveSchedulerFull = WeaveSchedulerLive.pipe(
@@ -63,4 +69,30 @@ export const OrchestrationLayerLive = Layer.mergeAll(
   WeaveContractConformerFull,
   RuntimeReceiptBusLive,
   GitCoreLive,
+);
+
+/**
+ * The real PlannerDriver wired to ProviderService + ServerSettingsService.
+ *
+ * OrchestrationEngineService is already satisfied internally (uses
+ * OrchestrationEngineFull). ProviderService and ServerSettingsService must
+ * come from the outer composition (server.ts provides them through
+ * ProviderLayerLive and ServerSettingsLive respectively).
+ *
+ * Usage in server.ts: provide this layer on the WeavePlanner layer BEFORE
+ * OrchestrationLayerLive, or use WeavePlannerWithRealDriverLive exported below.
+ */
+export const PlannerDriverFullLive = PlannerDriverLive.pipe(Layer.provide(OrchestrationEngineFull));
+
+/**
+ * WeavePlannerLive wired with the real PlannerDriver (for use in server.ts).
+ *
+ * Requires ProviderService + ServerSettingsService from the outer composition.
+ * This replaces the WeavePlannerFull inside OrchestrationLayerLive when the
+ * full server runtime merges this layer alongside OrchestrationLayerLive.
+ */
+export const WeavePlannerWithRealDriverLive = WeavePlannerLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(OrchestrationEngineFull),
+  Layer.provide(PlannerDriverFullLive),
 );

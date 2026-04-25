@@ -2,7 +2,8 @@
  * WeavePlannerLive - Layer implementation of the WeavePlanner service.
  *
  * Processing loop (per weave.created event):
- *  1. Call plannerDriver.compile({ vision, snapshotContent })
+ *  1. Call plannerDriver.compile({ weaveRunId, projectId, parentThreadTitle,
+ *       projectWorkspaceRoot, vision, snapshotContent })
  *  2. Parse raw output as JSON → try/catch
  *  3. Decode via Schema.decodeUnknownSync(Blueprint) inside Effect.try
  *  4. On success: weaveEngine.persistPlannerEvent(...)
@@ -22,6 +23,10 @@ import {
 } from "../Services/PlannerDriver.ts";
 import { WeavePlanner, type WeavePlannerShape } from "../Services/WeavePlanner.ts";
 import { WeaveEngineService, type WeaveEngineShape } from "../Services/WeaveEngine.ts";
+import {
+  OrchestrationEngineService,
+  type OrchestrationEngineShape,
+} from "../Services/OrchestrationEngine.ts";
 import type { WeaveOrchestrationEvent } from "../weaveProjector.ts";
 
 const serverCommandId = (tag: string): CommandId =>
@@ -52,7 +57,15 @@ function tryDecodeBlueprintText(rawText: string): Blueprint | string {
  */
 const attemptCompile = (
   driver: PlannerDriverShape,
-  input: { vision: string; snapshotContent: string; previousError?: string },
+  input: {
+    weaveRunId: WeaveCreatedEvent["payload"]["weaveRunId"];
+    projectId: WeaveCreatedEvent["payload"]["projectId"];
+    parentThreadTitle: string;
+    projectWorkspaceRoot: string;
+    vision: string;
+    snapshotContent: string;
+    previousError?: string;
+  },
 ): Effect.Effect<Blueprint | string, never> =>
   driver.compile(input).pipe(
     Effect.map((rawText) => tryDecodeBlueprintText(rawText)),
@@ -62,20 +75,47 @@ const attemptCompile = (
   );
 
 /**
+ * Resolve the workspace root for a project from the orchestration read model.
+ * Falls back to process.cwd() if the project is not found.
+ */
+const resolveProjectWorkspaceRoot = Effect.fn("WeavePlanner.resolveProjectWorkspaceRoot")(
+  function* (
+    orchestrationEngine: OrchestrationEngineShape,
+    projectId: WeaveCreatedEvent["payload"]["projectId"],
+  ) {
+    const readModel = yield* orchestrationEngine.getReadModel();
+    const project = readModel.projects.find((p) => p.id === projectId);
+    return project?.workspaceRoot ?? process.cwd();
+  },
+);
+
+/**
  * Process a single weave.created event: compile → decode → persist or abort.
  */
 const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(function* (
   event: WeaveCreatedEvent,
   weaveEngine: WeaveEngineShape,
   plannerDriver: PlannerDriverShape,
+  orchestrationEngine: OrchestrationEngineShape,
 ) {
-  const { weaveRunId, vision, snapshotContent = "" } = event.payload;
+  const { weaveRunId, vision, snapshotContent = "", projectId, title } = event.payload;
   const correlationCommandId = event.commandId ?? undefined;
+
+  const projectWorkspaceRoot = yield* resolveProjectWorkspaceRoot(orchestrationEngine, projectId);
 
   yield* Effect.log("WeavePlanner: compiling blueprint for run", { weaveRunId });
 
+  const compileInput = {
+    weaveRunId,
+    projectId,
+    parentThreadTitle: title,
+    projectWorkspaceRoot,
+    vision,
+    snapshotContent,
+  };
+
   // First attempt
-  const firstResult = yield* attemptCompile(plannerDriver, { vision, snapshotContent });
+  const firstResult = yield* attemptCompile(plannerDriver, compileInput);
 
   if (typeof firstResult !== "string") {
     const blueprint = firstResult;
@@ -100,8 +140,7 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
 
   // Retry once with previousError context
   const secondResult = yield* attemptCompile(plannerDriver, {
-    vision,
-    snapshotContent,
+    ...compileInput,
     previousError: firstError,
   });
 
@@ -149,9 +188,10 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
 const make = Effect.gen(function* () {
   const weaveEngine = yield* WeaveEngineService;
   const plannerDriver = yield* PlannerDriver;
+  const orchestrationEngine = yield* OrchestrationEngineService;
 
   const processEvent = (event: WeaveCreatedEvent) =>
-    processWeaveCreated(event, weaveEngine, plannerDriver).pipe(
+    processWeaveCreated(event, weaveEngine, plannerDriver, orchestrationEngine).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
