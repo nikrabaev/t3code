@@ -23,7 +23,6 @@ interface NodeRowProps {
   readonly node: WeaveNode;
   readonly detail: WeaveRunProjection;
   readonly environmentId: EnvironmentId;
-  readonly weaveRunId: WeaveRunId;
   readonly openNodeId: WeaveNodeId | undefined;
   readonly now: number;
   readonly dependsOnStatuses: ReadonlyMap<WeaveNodeId, WeaveNodeStatus>;
@@ -115,7 +114,6 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
                   node={node}
                   detail={detail}
                   environmentId={environmentId}
-                  weaveRunId={weaveRunId}
                   openNodeId={openNodeId}
                   now={now}
                   dependsOnStatuses={dependsOnStatuses}
