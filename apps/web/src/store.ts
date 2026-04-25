@@ -1226,7 +1226,7 @@ function applyWeaveEventToDetail(
       const nextNodeMeta = new Map(detail.nodeMeta);
       const prevDispatchedMeta = nextNodeMeta.get(payload.nodeId);
       nextNodeMeta.set(payload.nodeId, {
-        ...(prevDispatchedMeta ?? {}),
+        ...prevDispatchedMeta,
         status: "running",
         dispatchedAt: payload.occurredAt,
       });
@@ -1242,7 +1242,7 @@ function applyWeaveEventToDetail(
       const nextNodeMeta = new Map(detail.nodeMeta);
       const prevVerifiedMeta = nextNodeMeta.get(payload.nodeId);
       nextNodeMeta.set(payload.nodeId, {
-        ...(prevVerifiedMeta ?? {}),
+        ...prevVerifiedMeta,
         status: "verified",
         verifiedAt: payload.occurredAt,
       });
@@ -1253,7 +1253,7 @@ function applyWeaveEventToDetail(
       const nextNodeMeta = new Map(detail.nodeMeta);
       const prevFailedMeta = nextNodeMeta.get(payload.nodeId);
       nextNodeMeta.set(payload.nodeId, {
-        ...(prevFailedMeta ?? {}),
+        ...prevFailedMeta,
         status: "failed",
         failedAt: payload.occurredAt,
         failureReason: payload.reason,
