@@ -1,11 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  formatElapsedClock,
   formatElapsedDurationLabel,
   formatExpiresInLabel,
   formatRelativeTimeUntilLabel,
   getTimestampFormatOptions,
 } from "./timestampFormat";
+
+describe("formatElapsedClock", () => {
+  it("formats zero as 0:00", () => {
+    expect(formatElapsedClock(0)).toBe("0:00");
+  });
+
+  it("formats 23s as 0:23", () => {
+    expect(formatElapsedClock(23_000)).toBe("0:23");
+  });
+
+  it("formats 1m 45s as 1:45", () => {
+    expect(formatElapsedClock(105_000)).toBe("1:45");
+  });
+
+  it("formats 12m 3s as 12:03", () => {
+    expect(formatElapsedClock(723_000)).toBe("12:03");
+  });
+
+  it("formats 1h 2m 34s as 1:02:34", () => {
+    expect(formatElapsedClock(3_754_000)).toBe("1:02:34");
+  });
+
+  it("clamps negative input to 0:00", () => {
+    expect(formatElapsedClock(-100)).toBe("0:00");
+  });
+});
 
 describe("getTimestampFormatOptions", () => {
   it("omits hour12 when locale formatting is requested", () => {

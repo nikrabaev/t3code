@@ -116,6 +116,27 @@ export function formatRelativeTimeUntilLabel(isoDate: string): string {
 }
 
 /**
+ * Format a millisecond duration as an HH:MM:SS-style elapsed clock:
+ * - "0:23" for 23s
+ * - "1:45" for 1m 45s
+ * - "12:03" for 12m 3s
+ * - "1:02:34" for 1h 2m 34s
+ *
+ * Used for live elapsed-time displays where second precision matters.
+ * Differs from {@link formatElapsedDurationLabel}, which produces coarser
+ * "3s"/"5m"/"2h"/"1d" labels for "X ago" relative-time chrome.
+ */
+export function formatElapsedClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/**
  * Countdown for a future instant (e.g. link expiry): "Expires in 4m 12s", with second precision under one hour.
  * Pass `nowMs` when a parent tick drives re-renders so the diff matches that snapshot.
  */

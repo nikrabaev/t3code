@@ -3,8 +3,7 @@ import { isElectron } from "../../env";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import ChatView from "../ChatView";
-import { Button } from "../ui/button";
-import { buttonVariants } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import { WeaveStatusPill } from "./WeaveStatusPill";
 
 export interface WeaveInspectorProps {
@@ -31,7 +30,7 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
             Dispatched {formatRelativeTimeLabel(meta.dispatchedAt)}
           </p>
         )}
-        {meta?.failureReason && (
+        {meta?.status === "failed" && meta?.failureReason && (
           <p className="text-xs text-red-600">Failed: {meta.failureReason}</p>
         )}
         {childThread && (

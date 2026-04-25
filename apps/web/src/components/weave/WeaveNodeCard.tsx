@@ -1,16 +1,7 @@
 import type { WeaveNode, WeaveNodeMeta, WeaveNodeStatus } from "@t3tools/contracts";
 import { cn } from "../../lib/utils";
+import { formatElapsedClock } from "../../timestampFormat";
 import { WEAVE_STATUS_COLOR, WEAVE_STATUS_ICON } from "./WeaveStatusPill";
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
-  const ss = String(seconds).padStart(2, "0");
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-}
 
 export interface WeaveNodeCardProps {
   readonly node: WeaveNode;
@@ -68,11 +59,11 @@ export function WeaveNodeCard({
           <span className="text-red-600 truncate">{meta.failureReason}</span>
         )}
         {status === "running" && meta?.dispatchedAt && (
-          <span>{formatElapsed(now - new Date(meta.dispatchedAt).getTime())}</span>
+          <span>{formatElapsedClock(now - new Date(meta.dispatchedAt).getTime())}</span>
         )}
         {status === "verified" && meta?.verifiedAt && meta?.dispatchedAt && (
           <span>
-            {formatElapsed(
+            {formatElapsedClock(
               new Date(meta.verifiedAt).getTime() - new Date(meta.dispatchedAt).getTime(),
             )}
           </span>
