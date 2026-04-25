@@ -36,16 +36,6 @@ const OrchestrationEngineFull = OrchestrationEngineLive.pipe(
 
 const WeaveEngineFull = WeaveEngineLive.pipe(Layer.provide(OrchestrationEngineFull));
 
-// WeavePlannerFull uses the placeholder driver so that OrchestrationLayerLive
-// remains self-contained (no external ProviderService / ServerSettingsService
-// requirements). In the full server runtime server.ts overrides this by providing
-// PlannerDriverFullLive before OrchestrationLayerLive in its composition chain.
-const WeavePlannerFull = WeavePlannerLive.pipe(
-  Layer.provide(WeaveEngineFull),
-  Layer.provide(OrchestrationEngineFull),
-  Layer.provide(PlannerDriverPlaceholderLive),
-);
-
 const WeaveSchedulerFull = WeaveSchedulerLive.pipe(
   Layer.provide(WeaveEngineFull),
   Layer.provide(OrchestrationEngineFull),
@@ -59,16 +49,43 @@ const WeaveContractConformerFull = WeaveContractConformerLive.pipe(
   Layer.provide(ProcessRunnerLive),
 );
 
+/**
+ * Base orchestration layer — does NOT include WeavePlanner.
+ *
+ * The CLI uses this directly (it doesn't run weave commands so doesn't need
+ * a WeavePlanner). The server provides its own WeavePlanner via
+ * `WeavePlannerWithRealDriverLive` (real ProviderService-backed driver).
+ *
+ * The placeholder-bundled variant is exported separately as
+ * `OrchestrationLayerWithPlaceholderPlannerLive` for code that needs
+ * WeavePlanner without a full provider runtime (e.g. test harnesses that
+ * don't exercise compile()).
+ */
 export const OrchestrationLayerLive = Layer.mergeAll(
   OrchestrationInfrastructureLayerLive,
   OrchestrationEngineFull,
   WeaveEngineFull,
-  WeavePlannerFull,
   WeaveSchedulerFull,
   ProcessRunnerLive,
   WeaveContractConformerFull,
   RuntimeReceiptBusLive,
   GitCoreLive,
+);
+
+/**
+ * WeavePlanner bound to the placeholder driver — fails on any compile().
+ * For non-server contexts that need a WeavePlanner service binding without
+ * pulling in ProviderService.
+ */
+const WeavePlannerWithPlaceholderLive = WeavePlannerLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(OrchestrationEngineFull),
+  Layer.provide(PlannerDriverPlaceholderLive),
+);
+
+export const OrchestrationLayerWithPlaceholderPlannerLive = Layer.mergeAll(
+  OrchestrationLayerLive,
+  WeavePlannerWithPlaceholderLive,
 );
 
 /**
