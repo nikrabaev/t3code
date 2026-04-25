@@ -1,10 +1,13 @@
 import type { EnvironmentId, ProjectId, WeaveRunId } from "@t3tools/contracts";
+import { useShallow } from "zustand/react/shallow";
 import { useStore } from "../store";
 
 export function useWeaveRunsForProject(environmentId: EnvironmentId, projectId: ProjectId) {
-  return useStore((state) =>
-    Object.values(state.environmentStateById[environmentId]?.weaveRunsById ?? {}).filter(
-      (run) => run.projectId === projectId,
+  return useStore(
+    useShallow((state) =>
+      Object.values(state.environmentStateById[environmentId]?.weaveRunsById ?? {}).filter(
+        (run) => run.projectId === projectId,
+      ),
     ),
   );
 }
