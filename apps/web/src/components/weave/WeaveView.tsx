@@ -1,8 +1,10 @@
 "use client";
 
 import type { EnvironmentId, WeaveNodeId, WeaveRunId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { useWeaveRunShell, useWeaveRunDetail } from "../../weave/weaveStore";
 import { useWeaveRunDetailSubscription } from "../../environments/runtime/service";
+import { Sheet, SheetPopup } from "../ui/sheet";
 import { WeaveIntakeView } from "./WeaveIntakeView";
 import { WeaveBlueprintList } from "./WeaveBlueprintList";
 import { WeaveInspector } from "./WeaveInspector";
@@ -20,6 +22,7 @@ export function WeaveView(props: WeaveViewProps) {
   useWeaveRunDetailSubscription(props.environmentId, props.weaveRunId);
   const shell = useWeaveRunShell(props.environmentId, props.weaveRunId);
   const detail = useWeaveRunDetail(props.environmentId, props.weaveRunId);
+  const navigate = useNavigate();
 
   if (!shell) return <div className="p-8 text-muted-foreground">Loading weave run…</div>;
 
@@ -27,12 +30,18 @@ export function WeaveView(props: WeaveViewProps) {
   const blueprint = detail?.currentBlueprint ?? null;
   const isTerminal = shell.status === "complete" || shell.status === "aborted";
 
+  const handleInspectorOpenChange = (open: boolean) => {
+    if (!open) {
+      void navigate({
+        to: "/$environmentId/weave/$weaveRunId",
+        params: { environmentId: props.environmentId, weaveRunId: props.weaveRunId },
+        search: {},
+      });
+    }
+  };
+
   return (
-    <div
-      className={`grid h-full min-h-0 ${
-        inspectorOpen ? "grid-cols-[320px_1fr_400px]" : "grid-cols-[320px_1fr]"
-      }`}
-    >
+    <div className="grid h-full min-h-0 grid-cols-[320px_1fr]">
       {/* Left: chat sidebar — placeholder in v0.1 */}
       <aside className="border-r border-border p-4 overflow-y-auto">
         <div className="text-xs text-muted-foreground">Intake conversation (coming in v0.3)</div>
@@ -69,16 +78,18 @@ export function WeaveView(props: WeaveViewProps) {
         )}
       </main>
 
-      {/* Right: inspector — only mount the column when a node is selected. */}
-      {inspectorOpen && (
-        <aside className="border-l border-border min-h-0 overflow-hidden">
-          <WeaveInspector
-            environmentId={props.environmentId}
-            weaveRunDetail={detail!}
-            openNodeId={props.openNodeId!}
-          />
-        </aside>
-      )}
+      {/* Inspector overlay — slides over the page; backdrop / ESC dismisses. */}
+      <Sheet open={inspectorOpen} onOpenChange={handleInspectorOpenChange}>
+        <SheetPopup side="right" showCloseButton={false} className="p-0">
+          {detail && props.openNodeId !== undefined && (
+            <WeaveInspector
+              environmentId={props.environmentId}
+              weaveRunDetail={detail}
+              openNodeId={props.openNodeId}
+            />
+          )}
+        </SheetPopup>
+      </Sheet>
     </div>
   );
 }
