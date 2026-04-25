@@ -4,6 +4,7 @@ import type { EnvironmentId, WeaveNodeId, WeaveRunId } from "@t3tools/contracts"
 import { useNavigate } from "@tanstack/react-router";
 import { useWeaveRunShell, useWeaveRunDetail } from "../../weave/weaveStore";
 import { useWeaveRunDetailSubscription } from "../../environments/runtime/service";
+import { RIGHT_PANEL_SHEET_CLASS_NAME } from "../../rightPanelLayout";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { WeaveIntakeView } from "./WeaveIntakeView";
 import { WeaveBlueprintList } from "./WeaveBlueprintList";
@@ -80,7 +81,7 @@ export function WeaveView(props: WeaveViewProps) {
 
       {/* Inspector overlay — slides over the page; backdrop / ESC dismisses. */}
       <Sheet open={inspectorOpen} onOpenChange={handleInspectorOpenChange}>
-        <SheetPopup side="right" showCloseButton={false} className="p-0">
+        <SheetPopup side="right" showCloseButton={false} className={RIGHT_PANEL_SHEET_CLASS_NAME}>
           {detail && props.openNodeId !== undefined && (
             <WeaveInspector
               environmentId={props.environmentId}
