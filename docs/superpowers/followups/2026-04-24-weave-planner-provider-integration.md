@@ -34,3 +34,25 @@ persist → project); only the concrete LLM call is stubbed.
 ## Deferred to
 
 Slice 4.
+
+## Resolution
+
+Resolved 2026-04-25 in plan
+[`docs/superpowers/plans/2026-04-25-weave-planner-provider-integration.md`](../plans/2026-04-25-weave-planner-provider-integration.md).
+Tag: `weave-v0.1-planner-integrated`.
+
+Implementation:
+- `ThreadKind = "chat" | "planner"` added to `OrchestrationThread` /
+  `OrchestrationThreadShell`; `kind` column on `projection_threads` (migration 026).
+- New `weave.planner.thread-created` domain event; projector materialises a hidden
+  `kind: "planner"` thread row keyed off `weaveRunId`.
+- Sidebar / CommandPalette filter out `kind === "planner"` threads.
+- `ServerSettings.weave.planner.{provider, modelSelection}` — defaults to `claudeAgent`
+  with the project's default Claude model.
+- `PlannerDriverLive` now: dispatches the synthetic-thread event, calls
+  `ProviderService.startSession` / `sendTurn`, accumulates `content.delta`
+  payloads until `turn.completed` / `turn.aborted`, stops the session via
+  `Effect.ensuring`, returns the raw JSON for `WeavePlanner` to decode.
+- `PlannerDriver.compile` input extended with `weaveRunId`, `projectId`,
+  `parentThreadTitle`, `projectWorkspaceRoot` (recommendation 4.4a).
+- `PlannerDriverPlaceholderLive` retained for non-server contexts (CLI tools).
