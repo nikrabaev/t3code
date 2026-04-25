@@ -855,15 +855,13 @@ export default function ChatView(props: ChatViewProps) {
   // Option (c) from the plan: no per-message anchoring; banner at bottom only.
   // parentThreadId lives on the detail projection's run.parentThreadId.
   const weaveRunsForThread = useStore(
-    useMemo(() => {
-      return (state: AppState) => {
-        const envState = state.environmentStateById[environmentId];
-        if (!envState || !threadId) return [] as Array<{ id: WeaveRunId; title: string }>;
-        return Object.values(envState.weaveRunDetailById)
-          .filter((detail) => detail.run.parentThreadId === threadId)
-          .map((detail) => ({ id: detail.run.id, title: detail.run.title }));
-      };
-    }, [environmentId, threadId]),
+    useShallow((state: AppState) => {
+      const envState = state.environmentStateById[environmentId];
+      if (!envState || !threadId) return [] as Array<{ id: WeaveRunId; title: string }>;
+      return Object.values(envState.weaveRunDetailById)
+        .filter((detail) => detail.run.parentThreadId === threadId)
+        .map((detail) => ({ id: detail.run.id, title: detail.run.title }));
+    }),
   );
 
   // Compute the list of environments this logical project spans, used to
