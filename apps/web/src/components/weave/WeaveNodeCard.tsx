@@ -1,27 +1,22 @@
-import type { WeaveNode, WeaveNodeStatus } from "@t3tools/contracts";
+import type { WeaveNode, WeaveNodeMeta, WeaveNodeStatus } from "@t3tools/contracts";
 import { cn } from "../../lib/utils";
+import { WEAVE_STATUS_COLOR, WEAVE_STATUS_ICON } from "./WeaveStatusPill";
 
-const STATUS_COLOR: Record<WeaveNodeStatus, string> = {
-  pending: "bg-muted text-muted-foreground",
-  ready: "bg-blue-500/20 text-blue-700",
-  running: "bg-amber-500/20 text-amber-700",
-  verified: "bg-green-500/20 text-green-700",
-  failed: "bg-red-500/20 text-red-700",
-  paused: "bg-muted text-muted-foreground",
-};
-
-const STATUS_ICON: Record<WeaveNodeStatus, string> = {
-  pending: "○",
-  ready: "●",
-  running: "⏳",
-  verified: "✓",
-  failed: "✗",
-  paused: "⏸",
-};
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
 
 export interface WeaveNodeCardProps {
   readonly node: WeaveNode;
   readonly status: WeaveNodeStatus;
+  readonly meta: WeaveNodeMeta | null;
+  readonly now: number;
   readonly dependsOnStatuses: ReadonlyMap<string, WeaveNodeStatus>;
   readonly selected: boolean;
   readonly onClick: () => void;
@@ -30,6 +25,8 @@ export interface WeaveNodeCardProps {
 export function WeaveNodeCard({
   node,
   status,
+  meta,
+  now,
   dependsOnStatuses,
   selected,
   onClick,
@@ -46,10 +43,10 @@ export function WeaveNodeCard({
       <div
         className={cn(
           "w-6 h-6 flex items-center justify-center rounded text-xs",
-          STATUS_COLOR[status],
+          WEAVE_STATUS_COLOR[status],
         )}
       >
-        {STATUS_ICON[status]}
+        {WEAVE_STATUS_ICON[status]}
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{node.title}</div>
@@ -60,10 +57,25 @@ export function WeaveNodeCard({
                 key={dep}
                 className="inline-block border border-muted-foreground/30 rounded px-1.5 py-0.5 text-[10px]"
               >
-                {dep} {STATUS_ICON[dependsOnStatuses.get(dep) ?? "pending"]}
+                {dep} {WEAVE_STATUS_ICON[dependsOnStatuses.get(dep) ?? "pending"]}
               </span>
             ))}
           </div>
+        )}
+      </div>
+      <div className="text-xs text-muted-foreground shrink-0 max-w-[40%] text-right">
+        {status === "failed" && meta?.failureReason && (
+          <span className="text-red-600 truncate">{meta.failureReason}</span>
+        )}
+        {status === "running" && meta?.dispatchedAt && (
+          <span>{formatElapsed(now - new Date(meta.dispatchedAt).getTime())}</span>
+        )}
+        {status === "verified" && meta?.verifiedAt && meta?.dispatchedAt && (
+          <span>
+            {formatElapsed(
+              new Date(meta.verifiedAt).getTime() - new Date(meta.dispatchedAt).getTime(),
+            )}
+          </span>
         )}
       </div>
     </button>

@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import type { WeaveNodeId, WeaveNodeStatus, WeaveRunProjection } from "@t3tools/contracts";
+import { useTickingNow } from "../../hooks/useTickingNow";
 import { WeaveNodeCard } from "./WeaveNodeCard";
 
 export interface WeaveBlueprintListProps {
@@ -12,6 +13,7 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
   const { environmentId, weaveRunId } = useParams({
     from: "/_weave/$environmentId/weave/$weaveRunId",
   });
+  const now = useTickingNow(1000);
   const blueprint = detail.currentBlueprint!;
 
   // Group nodes by phase, preserving phase ordinal + node topological order.
@@ -32,6 +34,8 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
                   key={node.id}
                   node={node}
                   status={detail.nodeMeta.get(node.id)?.status ?? "pending"}
+                  meta={detail.nodeMeta.get(node.id) ?? null}
+                  now={now}
                   dependsOnStatuses={
                     new Map<WeaveNodeId, WeaveNodeStatus>(
                       Array.from(detail.nodeMeta, ([id, meta]) => [id, meta.status]),
