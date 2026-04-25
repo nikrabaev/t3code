@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   ProjectId,
+  ThreadId,
   WeaveNodeId,
   WeaveNodeMeta,
   WeaveRunId,
@@ -33,4 +34,26 @@ export function useWeaveRunDetail(environmentId: EnvironmentId, weaveRunId: Weav
 
 export function getNodeMeta(detail: WeaveRunProjection, nodeId: WeaveNodeId): WeaveNodeMeta | null {
   return detail.nodeMeta.get(nodeId) ?? null;
+}
+
+export function useLatestAssistantText(
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+): string | null {
+  return useStore((state) => {
+    const env = state.environmentStateById[environmentId];
+    if (!env) return null;
+    const ids = env.messageIdsByThreadId[threadId];
+    const byId = env.messageByThreadId[threadId];
+    if (!ids || !byId) return null;
+    for (let i = ids.length - 1; i >= 0; i--) {
+      const id = ids[i];
+      if (id === undefined) continue;
+      const msg = byId[id];
+      if (msg && msg.role === "assistant" && msg.text.length > 0) {
+        return msg.text;
+      }
+    }
+    return null;
+  });
 }

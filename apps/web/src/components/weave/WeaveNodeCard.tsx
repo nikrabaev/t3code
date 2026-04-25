@@ -11,6 +11,7 @@ export interface WeaveNodeCardProps {
   readonly dependsOnStatuses: ReadonlyMap<string, WeaveNodeStatus>;
   readonly selected: boolean;
   readonly onClick: () => void;
+  readonly latestMessage?: string | null;
 }
 
 export function WeaveNodeCard({
@@ -21,6 +22,7 @@ export function WeaveNodeCard({
   dependsOnStatuses,
   selected,
   onClick,
+  latestMessage,
 }: WeaveNodeCardProps) {
   return (
     <button
@@ -58,8 +60,15 @@ export function WeaveNodeCard({
         {status === "failed" && meta?.failureReason && (
           <span className="text-red-600 truncate">{meta.failureReason}</span>
         )}
+        {status === "running" && latestMessage && (
+          <span className="block text-xs text-muted-foreground italic truncate">
+            {latestMessage}
+          </span>
+        )}
         {status === "running" && meta?.dispatchedAt && (
-          <span>{formatElapsedClock(now - new Date(meta.dispatchedAt).getTime())}</span>
+          <span className="block">
+            {formatElapsedClock(now - new Date(meta.dispatchedAt).getTime())}
+          </span>
         )}
         {status === "verified" && meta?.verifiedAt && meta?.dispatchedAt && (
           <span>

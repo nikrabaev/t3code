@@ -1,6 +1,17 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import type { WeaveNodeId, WeaveNodeStatus, WeaveRunProjection } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ThreadId,
+  WeaveNode,
+  WeaveNodeId,
+  WeaveNodeStatus,
+  WeaveRunId,
+  WeaveRunProjection,
+} from "@t3tools/contracts";
+import { useMemo } from "react";
 import { useTickingNow } from "../../hooks/useTickingNow";
+import { useLatestAssistantText } from "../../weave/weaveStore";
+import { useWeaveRunningNodeSubscriptions } from "../../weave/useWeaveRunningNodeSubscriptions";
 import { WeaveNodeCard } from "./WeaveNodeCard";
 
 export interface WeaveBlueprintListProps {
@@ -8,13 +19,82 @@ export interface WeaveBlueprintListProps {
   readonly openNodeId?: WeaveNodeId | undefined;
 }
 
+interface NodeRowProps {
+  readonly node: WeaveNode;
+  readonly detail: WeaveRunProjection;
+  readonly environmentId: EnvironmentId;
+  readonly weaveRunId: WeaveRunId;
+  readonly openNodeId: WeaveNodeId | undefined;
+  readonly now: number;
+  readonly dependsOnStatuses: ReadonlyMap<WeaveNodeId, WeaveNodeStatus>;
+  readonly onClick: () => void;
+}
+
+function NodeRow({
+  node,
+  detail,
+  environmentId,
+  openNodeId,
+  now,
+  dependsOnStatuses,
+  onClick,
+}: NodeRowProps) {
+  const meta = detail.nodeMeta.get(node.id) ?? null;
+  const childThreadId =
+    meta?.status === "running" ? (detail.childThreads.get(node.id)?.threadId ?? null) : null;
+  // Always call the hook (rules of hooks). Use a stable sentinel when there's
+  // no thread to look up — the selector returns null for unknown ids.
+  const latestMessage = useLatestAssistantText(
+    environmentId,
+    childThreadId ?? ("__none__" as ThreadId),
+  );
+  return (
+    <WeaveNodeCard
+      node={node}
+      status={meta?.status ?? "pending"}
+      meta={meta}
+      now={now}
+      latestMessage={childThreadId ? latestMessage : null}
+      dependsOnStatuses={dependsOnStatuses}
+      selected={openNodeId === node.id}
+      onClick={onClick}
+    />
+  );
+}
+
 export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListProps) {
   const navigate = useNavigate();
-  const { environmentId, weaveRunId } = useParams({
+  const { environmentId: rawEnvironmentId, weaveRunId: rawWeaveRunId } = useParams({
     from: "/_weave/$environmentId/weave/$weaveRunId",
   });
+  const environmentId = rawEnvironmentId as EnvironmentId;
+  const weaveRunId = rawWeaveRunId as WeaveRunId;
   const now = useTickingNow(1000);
   const blueprint = detail.currentBlueprint!;
+
+  // Hoist dependsOnStatuses so it's computed once per render, not per row.
+  const dependsOnStatuses = useMemo(
+    () =>
+      new Map<WeaveNodeId, WeaveNodeStatus>(
+        Array.from(detail.nodeMeta, ([id, meta]) => [id, meta.status]),
+      ),
+    [detail.nodeMeta],
+  );
+
+  // Collect and subscribe to the thread detail streams for all running nodes.
+  const runningChildThreadIds = useMemo(() => {
+    const ids: ThreadId[] = [];
+    for (const [nodeId, meta] of detail.nodeMeta) {
+      if (meta.status === "running") {
+        const child = detail.childThreads.get(nodeId);
+        if (child) ids.push(child.threadId);
+      }
+    }
+    ids.sort(); // stable order for the join key
+    return ids;
+  }, [detail.nodeMeta, detail.childThreads]);
+
+  useWeaveRunningNodeSubscriptions(environmentId, runningChildThreadIds);
 
   // Group nodes by phase, preserving phase ordinal + node topological order.
   const phases = [...blueprint.phases].sort((a, b) => a.ordinal - b.ordinal);
@@ -30,18 +110,15 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
             </h2>
             <div className="flex flex-col">
               {phaseNodes.map((node) => (
-                <WeaveNodeCard
+                <NodeRow
                   key={node.id}
                   node={node}
-                  status={detail.nodeMeta.get(node.id)?.status ?? "pending"}
-                  meta={detail.nodeMeta.get(node.id) ?? null}
+                  detail={detail}
+                  environmentId={environmentId}
+                  weaveRunId={weaveRunId}
+                  openNodeId={openNodeId}
                   now={now}
-                  dependsOnStatuses={
-                    new Map<WeaveNodeId, WeaveNodeStatus>(
-                      Array.from(detail.nodeMeta, ([id, meta]) => [id, meta.status]),
-                    )
-                  }
-                  selected={openNodeId === node.id}
+                  dependsOnStatuses={dependsOnStatuses}
                   onClick={() =>
                     void navigate({
                       to: "/$environmentId/weave/$weaveRunId/node/$nodeId",
