@@ -1,4 +1,11 @@
-import type { EnvironmentId, ProjectId, WeaveRunId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ProjectId,
+  WeaveNodeId,
+  WeaveNodeMeta,
+  WeaveRunId,
+  WeaveRunProjection,
+} from "@t3tools/contracts";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "../store";
 
@@ -22,4 +29,8 @@ export function useWeaveRunDetail(environmentId: EnvironmentId, weaveRunId: Weav
   return useStore(
     (state) => state.environmentStateById[environmentId]?.weaveRunDetailById[weaveRunId] ?? null,
   );
+}
+
+export function getNodeMeta(detail: WeaveRunProjection, nodeId: WeaveNodeId): WeaveNodeMeta | null {
+  return detail.nodeMeta.get(nodeId) ?? null;
 }

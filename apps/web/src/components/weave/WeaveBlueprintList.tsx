@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import type { WeaveNodeId, WeaveRunProjection } from "@t3tools/contracts";
+import type { WeaveNodeId, WeaveNodeStatus, WeaveRunProjection } from "@t3tools/contracts";
 import { WeaveNodeCard } from "./WeaveNodeCard";
 
 export interface WeaveBlueprintListProps {
@@ -31,8 +31,12 @@ export function WeaveBlueprintList({ detail, openNodeId }: WeaveBlueprintListPro
                 <WeaveNodeCard
                   key={node.id}
                   node={node}
-                  status={detail.nodeStatuses.get(node.id) ?? "pending"}
-                  dependsOnStatuses={detail.nodeStatuses}
+                  status={detail.nodeMeta.get(node.id)?.status ?? "pending"}
+                  dependsOnStatuses={
+                    new Map<WeaveNodeId, WeaveNodeStatus>(
+                      Array.from(detail.nodeMeta, ([id, meta]) => [id, meta.status]),
+                    )
+                  }
                   selected={openNodeId === node.id}
                   onClick={() =>
                     void navigate({

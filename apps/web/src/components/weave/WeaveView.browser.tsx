@@ -16,7 +16,12 @@ import {
   type WeaveRunId,
   WS_METHODS,
 } from "@t3tools/contracts";
-import type { BlueprintVersion, WeavePhaseId, WeaveRunProjection } from "@t3tools/contracts";
+import type {
+  BlueprintVersion,
+  WeaveNodeMeta,
+  WeavePhaseId,
+  WeaveRunProjection,
+} from "@t3tools/contracts";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { HttpResponse, http, ws } from "msw";
 import { setupWorker } from "msw/browser";
@@ -267,13 +272,13 @@ function createWeaveRunProjection(
   },
 ): WeaveRunProjection {
   const blueprint = options?.withBlueprint === true ? createThreeNodeBlueprint() : null;
-  const nodeStatuses = new Map<WeaveNodeId, import("@t3tools/contracts").WeaveNodeStatus>();
+  const nodeMeta = new Map<WeaveNodeId, WeaveNodeMeta>();
   if (blueprint) {
     for (const node of blueprint.nodes) {
-      nodeStatuses.set(node.id, node.status);
+      nodeMeta.set(node.id, { status: node.status });
     }
     if ((options?.verifiedCount ?? 0) > 0) {
-      nodeStatuses.set(NODE_A_ID, "verified");
+      nodeMeta.set(NODE_A_ID, { status: "verified" });
     }
   }
   return {
@@ -287,7 +292,7 @@ function createWeaveRunProjection(
       createdAt: NOW_ISO,
     },
     currentBlueprint: blueprint,
-    nodeStatuses,
+    nodeMeta,
     openDecisions: new Set(),
     autoDecisionLog: [],
     phaseApprovals: new Map(),
