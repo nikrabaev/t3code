@@ -27,9 +27,9 @@ export function useWeaveRunningNodeSubscriptions(
     return () => {
       for (const release of releases) release();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // joinKey is a stable string derived from the sorted ids — depending on the
-    // array reference directly would cause the effect to re-run every render
+    // joinKey is a stable string derived from the running thread ids — depending
+    // on the array reference would cause the effect to re-run every render
     // because the parent passes a fresh array each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [environmentId, joinKey]);
 }

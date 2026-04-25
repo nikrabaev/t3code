@@ -1,5 +1,5 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Per-call release spies so we can verify per-thread release behavior.
 const mockReleasesByCall: Array<ReturnType<typeof vi.fn>> = [];
@@ -22,11 +22,10 @@ const ENV = EnvironmentId.make("env-1");
 const T1 = ThreadId.make("t-1");
 const T2 = ThreadId.make("t-2");
 
-/**
- * Simulates the effect body that `useWeaveRunningNodeSubscriptions` registers.
- * Returns the cleanup function so callers can simulate unmount.
- */
-function runEffect(
+// Models the effect body that `useWeaveRunningNodeSubscriptions` registers rather
+// than rendering the hook itself; the corresponding integration check is the
+// visual smoke test in Task 3.
+function simulateEffectBody(
   environmentId: EnvironmentId,
   runningChildThreadIds: ReadonlyArray<ThreadId>,
 ): () => void {
@@ -43,13 +42,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-afterEach(() => {
-  vi.clearAllMocks();
-});
-
 describe("useWeaveRunningNodeSubscriptions effect logic", () => {
   it("retains subscriptions for all running thread ids on mount", () => {
-    const cleanup = runEffect(ENV, [T1, T2]);
+    const cleanup = simulateEffectBody(ENV, [T1, T2]);
 
     expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(2);
     expect(retainThreadDetailSubscription).toHaveBeenCalledWith(ENV, T1);
@@ -59,7 +54,7 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
   });
 
   it("releases all subscriptions on unmount", () => {
-    const cleanup = runEffect(ENV, [T1, T2]);
+    const cleanup = simulateEffectBody(ENV, [T1, T2]);
     const [release1, release2] = mockReleasesByCall;
 
     cleanup();
@@ -70,7 +65,7 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
 
   it("releases stale subscriptions when the running set shrinks", () => {
     // Mount with t-1 and t-2.
-    const cleanupFirst = runEffect(ENV, [T1, T2]);
+    const cleanupFirst = simulateEffectBody(ENV, [T1, T2]);
     const [releaseT1First, releaseT2] = mockReleasesByCall;
 
     // Simulate a rerender where t-2 is no longer running.
@@ -84,7 +79,7 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
     vi.clearAllMocks();
     mockReleasesByCall.length = 0;
 
-    const cleanupSecond = runEffect(ENV, [T1]);
+    const cleanupSecond = simulateEffectBody(ENV, [T1]);
 
     expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(1);
     expect(retainThreadDetailSubscription).toHaveBeenCalledWith(ENV, T1);
@@ -96,13 +91,13 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
     // The hook depends on `joinKey = ids.join("|")`. If the content does not
     // change, the effect does not re-run even if a fresh array is passed in.
     //
-    // Approach A: we wrap runEffect with the same dep-equality gate React uses.
+    // Approach A: we wrap simulateEffectBody with the same dep-equality gate React uses (simulateEffectWithDepGate).
     // Two renders pass in different array *references* but identical *content*.
     // The guard skips the second invocation, so retain stays at 2 total.
     let previousJoinKey: string | undefined;
     let currentCleanup: (() => void) | undefined;
 
-    function runEffectWithDepGate(
+    function simulateEffectWithDepGate(
       environmentId: EnvironmentId,
       runningChildThreadIds: ReadonlyArray<ThreadId>,
     ): (() => void) | undefined {
@@ -114,16 +109,16 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
       // Dep changed — run cleanup from previous render then run new effect.
       currentCleanup?.();
       previousJoinKey = joinKey;
-      currentCleanup = runEffect(environmentId, runningChildThreadIds);
+      currentCleanup = simulateEffectBody(environmentId, runningChildThreadIds);
       return currentCleanup;
     }
 
     // First render: [T1, T2] — effect runs, 2 retains.
-    runEffectWithDepGate(ENV, [T1, T2]);
+    simulateEffectWithDepGate(ENV, [T1, T2]);
     expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(2);
 
     // Second render: fresh array ref but identical content — effect must NOT run.
-    const secondResult = runEffectWithDepGate(ENV, [T1, T2] as ThreadId[]);
+    const secondResult = simulateEffectWithDepGate(ENV, [T1, T2] as ThreadId[]);
     expect(secondResult).toBeUndefined(); // gate blocked the re-run
     expect(retainThreadDetailSubscription).toHaveBeenCalledTimes(2); // still 2, not 4
 
@@ -132,7 +127,7 @@ describe("useWeaveRunningNodeSubscriptions effect logic", () => {
   });
 
   it("retains no subscriptions when the running set is empty", () => {
-    const cleanup = runEffect(ENV, []);
+    const cleanup = simulateEffectBody(ENV, []);
 
     expect(retainThreadDetailSubscription).not.toHaveBeenCalled();
 
