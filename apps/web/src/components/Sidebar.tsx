@@ -1050,6 +1050,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     null,
   );
   const [projectRenameTitle, setProjectRenameTitle] = useState("");
+  const [projectRenameVerifierCommand, setProjectRenameVerifierCommand] = useState("");
   const [projectGroupingTarget, setProjectGroupingTarget] =
     useState<SidebarProjectGroupMember | null>(null);
   const [projectGroupingSelection, setProjectGroupingSelection] = useState<
@@ -1260,6 +1261,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const openProjectRenameDialog = useCallback((member: SidebarProjectGroupMember) => {
     setProjectRenameTarget(member);
     setProjectRenameTitle(member.name);
+    setProjectRenameVerifierCommand(member.verifierCommand ?? "");
   }, []);
 
   const openProjectGroupingDialog = useCallback(
@@ -1485,7 +1487,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
         const clicked = await api.contextMenu.show(
           [
-            buildTargetedItem("rename", "Rename project"),
+            buildTargetedItem("rename", "Project settings…"),
             buildTargetedItem("grouping", "Project grouping…"),
             buildTargetedItem("copy-path", "Copy Project Path"),
             buildTargetedItem("delete", "Remove project", {
@@ -1787,6 +1789,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const closeProjectRenameDialog = useCallback(() => {
     setProjectRenameTarget(null);
     setProjectRenameTitle("");
+    setProjectRenameVerifierCommand("");
   }, []);
 
   const submitProjectRename = useCallback(async () => {
@@ -1794,8 +1797,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       return;
     }
 
-    const trimmed = projectRenameTitle.trim();
-    if (trimmed.length === 0) {
+    const trimmedTitle = projectRenameTitle.trim();
+    if (trimmedTitle.length === 0) {
       toastManager.add({
         type: "warning",
         title: "Project title cannot be empty",
@@ -1803,7 +1806,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       return;
     }
 
-    if (trimmed === projectRenameTarget.name) {
+    const trimmedVerifierCommand = projectRenameVerifierCommand.trim();
+    const nextVerifierCommand: string | null =
+      trimmedVerifierCommand.length === 0 ? null : trimmedVerifierCommand;
+    const previousVerifierCommand = projectRenameTarget.verifierCommand ?? null;
+
+    const titleChanged = trimmedTitle !== projectRenameTarget.name;
+    const verifierCommandChanged = nextVerifierCommand !== previousVerifierCommand;
+
+    if (!titleChanged && !verifierCommandChanged) {
       closeProjectRenameDialog();
       return;
     }
@@ -1813,7 +1824,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Failed to rename project",
+          title: "Failed to update project",
           description: "Project API unavailable.",
         }),
       );
@@ -1825,19 +1836,25 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         type: "project.meta.update",
         commandId: newCommandId(),
         projectId: projectRenameTarget.id,
-        title: trimmed,
+        ...(titleChanged ? { title: trimmedTitle } : {}),
+        ...(verifierCommandChanged ? { verifierCommand: nextVerifierCommand } : {}),
       });
       closeProjectRenameDialog();
     } catch (error) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Failed to rename project",
+          title: "Failed to update project",
           description: error instanceof Error ? error.message : "An error occurred.",
         }),
       );
     }
-  }, [closeProjectRenameDialog, projectRenameTarget, projectRenameTitle]);
+  }, [
+    closeProjectRenameDialog,
+    projectRenameTarget,
+    projectRenameTitle,
+    projectRenameVerifierCommand,
+  ]);
 
   const closeProjectGroupingDialog = useCallback(() => {
     setProjectGroupingTarget(null);
@@ -2093,11 +2110,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       >
         <DialogPopup className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Rename project</DialogTitle>
+            <DialogTitle>Project settings</DialogTitle>
             <DialogDescription>
               {projectRenameTarget
-                ? `Update the title for ${projectRenameTarget.cwd}.`
-                : "Update the project title."}
+                ? `Update settings for ${projectRenameTarget.cwd}.`
+                : "Update project settings."}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="space-y-4">
@@ -2114,6 +2131,26 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                   }
                 }}
               />
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-xs font-medium text-foreground">Weave verifier command</span>
+              <Input
+                aria-label="Weave verifier command"
+                placeholder="e.g. npm test, cargo test, pytest (leave empty for default)"
+                value={projectRenameVerifierCommand}
+                onChange={(event) => setProjectRenameVerifierCommand(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitProjectRename();
+                  }
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Run after each Weave node finishes. Empty falls back to{" "}
+                <code className="rounded bg-muted px-1 py-0.5">bun run test</code>. Per-node
+                overrides come from the planner.
+              </p>
             </div>
             {projectRenameTarget?.environmentLabel ? (
               <p className="text-xs text-muted-foreground">
