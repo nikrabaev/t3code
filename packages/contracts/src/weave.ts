@@ -406,6 +406,15 @@ export const WeaveExitedPayload = Schema.Struct({
 });
 export type WeaveExitedPayload = typeof WeaveExitedPayload.Type;
 
+export const WeavePlannerThreadCreatedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  occurredAt: IsoDateTime,
+});
+export type WeavePlannerThreadCreatedPayload = typeof WeavePlannerThreadCreatedPayload.Type;
+
 // --- WeaveRunProjection ---
 // The accumulated read-model state for one WeaveRun. Promoted to contracts in
 // Slice 3 Task 3 so OrchestrationReadModel.weaveRuns can reference the schema.

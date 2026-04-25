@@ -39,6 +39,7 @@ import {
   WeaveNodeVerifiedPayload,
   WeavePhaseApproveCommand,
   WeavePhaseApprovedPayload,
+  WeavePlannerThreadCreatedPayload,
   WeaveRunId,
   WeaveRunProjectionSchema,
   WeaveRunStatus,
@@ -859,6 +860,8 @@ export const OrchestrationEventType = Schema.Literals([
   "weave.decision-resolved",
   "weave.phase-approved",
   "weave.exited",
+  // Weave planner events (Slice 3 Task 2)
+  "weave.planner.thread-created",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -1221,6 +1224,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("weave.exited"),
     payload: WeaveExitedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.planner.thread-created"),
+    payload: WeavePlannerThreadCreatedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

@@ -1,6 +1,8 @@
 import {
   ApprovalRequestId,
   type ChatAttachment,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  DEFAULT_RUNTIME_MODE,
   type OrchestrationEvent,
   ThreadId,
 } from "@t3tools/contracts";
@@ -569,11 +571,35 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             modelSelection: event.payload.modelSelection,
             runtimeMode: event.payload.runtimeMode,
             interactionMode: event.payload.interactionMode,
+            kind: "chat",
             branch: event.payload.branch,
             worktreePath: event.payload.worktreePath,
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
+            archivedAt: null,
+            latestUserMessageAt: null,
+            pendingApprovalCount: 0,
+            pendingUserInputCount: 0,
+            hasActionableProposedPlan: 0,
+            deletedAt: null,
+          });
+          return;
+
+        case "weave.planner.thread-created":
+          yield* projectionThreadRepository.upsert({
+            threadId: event.payload.threadId,
+            projectId: event.payload.projectId,
+            title: event.payload.title,
+            modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+            runtimeMode: DEFAULT_RUNTIME_MODE,
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            kind: "planner",
+            branch: null,
+            worktreePath: null,
+            latestTurnId: null,
+            createdAt: event.payload.occurredAt,
+            updatedAt: event.payload.occurredAt,
             archivedAt: null,
             latestUserMessageAt: null,
             pendingApprovalCount: 0,

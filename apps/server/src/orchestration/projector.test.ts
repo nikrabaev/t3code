@@ -1084,3 +1084,80 @@ describe("orchestration projector — weave events", () => {
     expect(afterThread.threads).toHaveLength(1);
   });
 });
+
+describe("orchestration projector — weave.planner.thread-created", () => {
+  const NOW = "2026-04-25T00:00:00.000Z";
+  const RUN_ID = WeaveRunId.make("weave-run-planner-1");
+  const PROJECT_ID = ProjectId.make("project-planner-1");
+  const THREAD_ID = ThreadId.make("thread-planner-1");
+
+  it("projects weave.planner.thread-created — adds a thread with kind=planner", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    const next = await Effect.runPromise(
+      projectEvent(initial, {
+        sequence: 1,
+        eventId: EventId.make("weave-planner-event-1"),
+        type: "weave.planner.thread-created",
+        aggregateKind: "weave",
+        aggregateId: RUN_ID,
+        occurredAt: NOW,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          weaveRunId: RUN_ID,
+          threadId: THREAD_ID,
+          projectId: PROJECT_ID,
+          title: "Planner thread",
+          occurredAt: NOW,
+        },
+      } as OrchestrationEvent),
+    );
+
+    expect(next.threads).toHaveLength(1);
+    const thread = next.threads[0];
+    expect(thread?.id).toBe(THREAD_ID);
+    expect(thread?.kind).toBe("planner");
+    expect(thread?.projectId).toBe(PROJECT_ID);
+    expect(thread?.title).toBe("Planner thread");
+    expect(thread?.latestTurn).toBeNull();
+    expect(thread?.messages).toEqual([]);
+    expect(thread?.session).toBeNull();
+  });
+
+  it("thread.created produces kind=chat", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    const next = await Effect.runPromise(
+      projectEvent(initial, {
+        sequence: 1,
+        eventId: EventId.make("thread-event-1"),
+        type: "thread.created",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-chat-1"),
+        occurredAt: NOW,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: "thread-chat-1",
+          projectId: PROJECT_ID,
+          title: "Chat thread",
+          modelSelection: { provider: "codex", model: "gpt-5-codex" },
+          runtimeMode: "full-access",
+          branch: null,
+          worktreePath: null,
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      } as OrchestrationEvent),
+    );
+
+    expect(next.threads).toHaveLength(1);
+    const thread = next.threads[0];
+    expect(thread?.kind).toBe("chat");
+  });
+});

@@ -650,6 +650,38 @@ export function projectEvent(
         }),
       );
 
+    case "weave.planner.thread-created": {
+      const payload = event.payload;
+      const thread: OrchestrationThread = {
+        id: payload.threadId,
+        projectId: payload.projectId,
+        title: payload.title,
+        modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        kind: "planner",
+        branch: null,
+        worktreePath: null,
+        latestTurn: null,
+        createdAt: payload.occurredAt,
+        updatedAt: payload.occurredAt,
+        archivedAt: null,
+        deletedAt: null,
+        messages: [],
+        proposedPlans: [],
+        activities: [],
+        checkpoints: [],
+        session: null,
+      };
+      const existing = nextBase.threads.find((entry) => entry.id === thread.id);
+      return Effect.succeed({
+        ...nextBase,
+        threads: existing
+          ? nextBase.threads.map((entry) => (entry.id === thread.id ? thread : entry))
+          : [...nextBase.threads, thread],
+      });
+    }
+
     case "weave.created":
     case "weave.blueprint-compiled":
     case "weave.blueprint-approved":

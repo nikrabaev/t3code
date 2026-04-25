@@ -263,6 +263,19 @@ export function projectWeaveEvent(
         run: { ...state.run, status: payload.reason },
       });
     }
+    case "weave.planner.thread-created": {
+      // The planner thread is materialized in the projection_threads table by the
+      // threads projector. The WeaveRun projection itself does not change here.
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.planner.thread-created requires existing projection (null received).`,
+          }),
+        );
+      }
+      return Effect.succeed(state);
+    }
     default: {
       const _exhaustive: never = event;
       void _exhaustive;

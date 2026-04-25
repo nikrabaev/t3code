@@ -715,6 +715,7 @@ import {
   WeaveNodeFailedPayload,
   WeaveNodeVerifiedPayload,
   WeavePhaseApprovedPayload,
+  WeavePlannerThreadCreatedPayload,
 } from "./weave.ts";
 
 const decodeWeaveCreatedPayload = Schema.decodeUnknownEffect(WeaveCreatedPayload);
@@ -849,5 +850,41 @@ it.effect("decodes WeaveExitedPayload", () =>
       occurredAt: "2026-04-21T00:00:00.000Z",
     });
     assert.strictEqual(parsed.reason, "complete");
+  }),
+);
+
+const decodeWeavePlannerThreadCreatedPayload = Schema.decodeUnknownEffect(
+  WeavePlannerThreadCreatedPayload,
+);
+
+it.effect("round-trips WeavePlannerThreadCreatedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeavePlannerThreadCreatedPayload({
+      weaveRunId: "run-1",
+      threadId: "thread-planner-1",
+      projectId: "project-1",
+      title: "Planner thread",
+      occurredAt: "2026-04-25T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+    assert.strictEqual(parsed.threadId, "thread-planner-1");
+    assert.strictEqual(parsed.projectId, "project-1");
+    assert.strictEqual(parsed.title, "Planner thread");
+    assert.strictEqual(parsed.occurredAt, "2026-04-25T00:00:00.000Z");
+  }),
+);
+
+it.effect("rejects WeavePlannerThreadCreatedPayload with missing threadId", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWeavePlannerThreadCreatedPayload({
+        weaveRunId: "run-1",
+        projectId: "project-1",
+        title: "Planner thread",
+        occurredAt: "2026-04-25T00:00:00.000Z",
+        // threadId missing
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
   }),
 );
