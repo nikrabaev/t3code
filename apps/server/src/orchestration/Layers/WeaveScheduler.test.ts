@@ -393,7 +393,7 @@ describe("WeaveScheduler", () => {
     // The weave run should have the node in "running" state (dispatched)
     const projection = await system.run(weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     expect(projection).not.toBeNull();
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("node-1"))).toBe("running");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("node-1"))?.status).toBe("running");
     expect(projection?.childThreads.size).toBe(1);
     expect(projection?.childThreads.get(WeaveNodeId.make("node-1"))).toBeDefined();
 
@@ -474,8 +474,8 @@ describe("WeaveScheduler", () => {
 
           // At this point node-a should be "running"; node-b still "pending"
           const p1 = yield* weaveEngine.getWeaveRun(WeaveRunId.make(runId));
-          expect(p1?.nodeStatuses.get(WeaveNodeId.make("node-a"))).toBe("running");
-          expect(p1?.nodeStatuses.get(WeaveNodeId.make("node-b"))).toBe("pending");
+          expect(p1?.nodeMeta.get(WeaveNodeId.make("node-a"))?.status).toBe("running");
+          expect(p1?.nodeMeta.get(WeaveNodeId.make("node-b"))?.status).toBe("pending");
 
           // Simulate node-a being verified (triggers scheduler for node-b)
           const nodeAChildThread = p1?.childThreads.get(WeaveNodeId.make("node-a"));
@@ -500,9 +500,9 @@ describe("WeaveScheduler", () => {
 
     const projection = await system.run(weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     // node-a is "verified" now
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("node-a"))).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("node-a"))?.status).toBe("verified");
     // node-b was picked up and is now "running"
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("node-b"))).toBe("running");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("node-b"))?.status).toBe("running");
     expect(projection?.childThreads.get(WeaveNodeId.make("node-b"))).toBeDefined();
 
     await system.dispose();

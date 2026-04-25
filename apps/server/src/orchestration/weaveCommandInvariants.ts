@@ -108,7 +108,7 @@ export function requireNodeStatus(input: {
   readonly nodeId: WeaveNodeId;
   readonly allowed: ReadonlyArray<WeaveNodeStatus>;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
-  const actual = input.projection.nodeStatuses.get(input.nodeId);
+  const actual = input.projection.nodeMeta.get(input.nodeId)?.status;
   if (actual !== undefined && input.allowed.includes(actual)) return Effect.void;
   return fail(
     input.command,
@@ -153,7 +153,7 @@ export function requireAncestorsVerified(input: {
   readonly node: WeaveNode;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   for (const ancestorId of input.node.dependsOn) {
-    const status = input.projection.nodeStatuses.get(ancestorId);
+    const status = input.projection.nodeMeta.get(ancestorId)?.status;
     if (status !== "verified") {
       return fail(
         input.command,

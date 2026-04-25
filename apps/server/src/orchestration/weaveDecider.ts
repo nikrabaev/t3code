@@ -234,7 +234,10 @@ export function decideWeaveCommand(input: {
           }),
         ];
         const bp = run.currentBlueprint;
-        if (bp !== null && isPhaseNowComplete(bp, run.nodeStatuses, node.phaseId, command.nodeId)) {
+        const nodeStatusMap = new Map(
+          Array.from(run.nodeMeta, ([id, meta]) => [id, meta.status] as const),
+        );
+        if (bp !== null && isPhaseNowComplete(bp, nodeStatusMap, node.phaseId, command.nodeId)) {
           results.push(
             envelope({
               type: "weave.phase-approved",

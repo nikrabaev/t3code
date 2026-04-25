@@ -372,7 +372,7 @@ describe("WeaveContractConformer", () => {
     expect(system.stubProcessRunner.getRunCount()).toBe(1);
 
     const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make(nodeId))).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("verified");
 
     await system.dispose();
   });
@@ -419,7 +419,7 @@ describe("WeaveContractConformer", () => {
     expect(system.stubProcessRunner.getRunCount()).toBe(1);
 
     const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make(nodeId))).toBe("failed");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("failed");
 
     // Assert failure reason contains the exit code (not a timeout reason).
     const allEvents = await system.run(
@@ -483,7 +483,7 @@ describe("WeaveContractConformer", () => {
     expect(system.stubProcessRunner.getRunCount()).toBe(1);
 
     const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make(nodeId))).toBe("failed");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("failed");
 
     // Assert failure reason is exactly "timeout" (not an exit-code reason).
     const allEvents = await system.run(

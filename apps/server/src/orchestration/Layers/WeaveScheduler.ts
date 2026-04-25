@@ -50,8 +50,8 @@ type SchedulerTriggerEvent = Extract<
 function computeReadySet(run: WeaveRunProjection): WeaveNode[] {
   if (run.currentBlueprint === null) return [];
   return run.currentBlueprint.nodes.filter((n) => {
-    if (run.nodeStatuses.get(n.id) !== "pending") return false;
-    return n.dependsOn.every((dep) => run.nodeStatuses.get(dep) === "verified");
+    if (run.nodeMeta.get(n.id)?.status !== "pending") return false;
+    return n.dependsOn.every((dep) => run.nodeMeta.get(dep)?.status === "verified");
   });
 }
 

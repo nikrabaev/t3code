@@ -272,7 +272,7 @@ describe("requireAncestorsVerified", () => {
     const ancestorId = WeaveNodeId.make("parent");
     const p = {
       ...emptyProjection(),
-      nodeStatuses: new Map([[ancestorId, "verified" as const]]),
+      nodeMeta: new Map([[ancestorId, { status: "verified" as const }]]),
     };
     const node = {
       id: WeaveNodeId.make("child"),
@@ -296,7 +296,7 @@ describe("requireAncestorsVerified", () => {
     const ancestorId = WeaveNodeId.make("parent");
     const p = {
       ...emptyProjection(),
-      nodeStatuses: new Map([[ancestorId, "running" as const]]),
+      nodeMeta: new Map([[ancestorId, { status: "running" as const }]]),
     };
     const node = {
       id: WeaveNodeId.make("child"),
@@ -316,7 +316,7 @@ describe("requireAncestorsVerified", () => {
     ).rejects.toThrow("ancestor");
   });
 
-  it("rejects with 'unknown' status when ancestor absent from nodeStatuses", async () => {
+  it("rejects with 'unknown' status when ancestor absent from nodeMeta", async () => {
     const ancestorId = WeaveNodeId.make("ghost-parent");
     const node = {
       id: WeaveNodeId.make("child"),

@@ -134,7 +134,7 @@ describe("weave decider+projector roundtrip", () => {
     // 4. manually mark node-a ready (scheduler normally does this; decider requires "ready" before dispatch)
     const readyState: WeaveRunProjection = {
       ...s3.projection,
-      nodeStatuses: new Map(s3.projection.nodeStatuses).set(nodeA, "ready"),
+      nodeMeta: new Map(s3.projection.nodeMeta).set(nodeA, { status: "ready" }),
     };
 
     // 5. dispatch node-a
@@ -147,7 +147,7 @@ describe("weave decider+projector roundtrip", () => {
       worktreePath: "/tmp/wt/a",
       createdAt: now,
     });
-    expect(s5.projection.nodeStatuses.get(nodeA)).toBe("running");
+    expect(s5.projection.nodeMeta.get(nodeA)?.status).toBe("running");
 
     // 6. verify node-a — only 1 event (node-b still pending)
     const s6 = await step(s5.projection, {
@@ -159,12 +159,12 @@ describe("weave decider+projector roundtrip", () => {
       createdAt: now,
     });
     expect(s6.events).toHaveLength(1);
-    expect(s6.projection.nodeStatuses.get(nodeA)).toBe("verified");
+    expect(s6.projection.nodeMeta.get(nodeA)?.status).toBe("verified");
 
     // 7. mark node-b ready
     const bReady: WeaveRunProjection = {
       ...s6.projection,
-      nodeStatuses: new Map(s6.projection.nodeStatuses).set(nodeB, "ready"),
+      nodeMeta: new Map(s6.projection.nodeMeta).set(nodeB, { status: "ready" }),
     };
 
     // 8. dispatch + verify node-b — verify should emit 3 events (verified + phase-approved + exited)

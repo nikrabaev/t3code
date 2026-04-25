@@ -5,6 +5,7 @@ import {
   ThreadId,
   WeaveDecisionId,
   WeaveNodeId,
+  type WeaveNodeMeta,
   WeaveNodeStatus,
   WeavePhaseId,
   WeaveRunId,
@@ -42,9 +43,9 @@ function buildRunningProjection(params: {
 }): WeaveRunProjection {
   const runId = params.runId ?? "run-1";
   const defaultPhaseId = params.phases[0]?.id ?? "phase-1";
-  const nodeStatuses = new Map<WeaveNodeId, WeaveNodeStatus>();
+  const nodeMeta = new Map<WeaveNodeId, WeaveNodeMeta>();
   for (const n of params.nodes) {
-    nodeStatuses.set(WeaveNodeId.make(n.id), n.status ?? "pending");
+    nodeMeta.set(WeaveNodeId.make(n.id), { status: n.status ?? "pending" });
   }
   const base = createEmptyWeaveProjection({
     id: WeaveRunId.make(runId),
@@ -85,7 +86,7 @@ function buildRunningProjection(params: {
       compiledAt: now,
       compiledBy: "planner" as const,
     },
-    nodeStatuses,
+    nodeMeta,
     openDecisions: new Set(),
     autoDecisionLog: [],
     phaseApprovals: new Map(),
@@ -358,7 +359,7 @@ describe("decideWeaveCommand — weave.node.dispatch", () => {
     const base = emptyProjection(); // status=draft
     const p: WeaveRunProjection = {
       ...base,
-      nodeStatuses: new Map([[WeaveNodeId.make("node-1"), "ready" as const]]),
+      nodeMeta: new Map([[WeaveNodeId.make("node-1"), { status: "ready" as const }]]),
     };
     await expect(
       Effect.runPromise(

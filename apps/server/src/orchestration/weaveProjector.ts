@@ -6,7 +6,7 @@ import type {
   ThreadId,
   WeaveDecisionId,
   WeaveNodeId,
-  WeaveNodeStatus,
+  WeaveNodeMeta,
   WeavePhaseApproval,
   WeavePhaseId,
   WeaveRun,
@@ -60,7 +60,7 @@ export function createEmptyWeaveProjection(params: {
   return {
     run,
     currentBlueprint: null,
-    nodeStatuses: new Map(),
+    nodeMeta: new Map(),
     openDecisions: new Set(),
     autoDecisionLog: [],
     phaseApprovals: new Map(),
@@ -121,9 +121,9 @@ export function projectWeaveEvent(
         );
       }
       const { payload } = event;
-      const nextNodeStatuses = new Map<WeaveNodeId, WeaveNodeStatus>();
+      const nextNodeMeta = new Map<WeaveNodeId, WeaveNodeMeta>();
       for (const node of payload.blueprint.nodes) {
-        nextNodeStatuses.set(node.id, "pending");
+        nextNodeMeta.set(node.id, { status: "pending" });
       }
       const nextOpenDecisions = new Set<WeaveDecisionId>();
       for (const decision of payload.blueprint.decisions) {
@@ -135,7 +135,7 @@ export function projectWeaveEvent(
         ...state,
         run: { ...state.run, status: "reviewing" },
         currentBlueprint: payload.blueprint,
-        nodeStatuses: nextNodeStatuses,
+        nodeMeta: nextNodeMeta,
         openDecisions: nextOpenDecisions,
       });
     }
@@ -169,8 +169,13 @@ export function projectWeaveEvent(
         );
       }
       const { payload } = event;
-      const nextNodeStatuses = new Map(state.nodeStatuses);
-      nextNodeStatuses.set(payload.nodeId, "running");
+      const nextNodeMeta = new Map(state.nodeMeta);
+      const prevDispatchedMeta = nextNodeMeta.get(payload.nodeId);
+      nextNodeMeta.set(payload.nodeId, {
+        ...(prevDispatchedMeta ?? {}),
+        status: "running",
+        dispatchedAt: payload.occurredAt,
+      });
       const nextChildThreads = new Map(state.childThreads);
       nextChildThreads.set(payload.nodeId, {
         threadId: payload.childThreadId,
@@ -178,7 +183,7 @@ export function projectWeaveEvent(
       });
       return Effect.succeed({
         ...state,
-        nodeStatuses: nextNodeStatuses,
+        nodeMeta: nextNodeMeta,
         childThreads: nextChildThreads,
       });
     }
@@ -192,9 +197,14 @@ export function projectWeaveEvent(
         );
       }
       const { payload } = event;
-      const nextNodeStatuses = new Map(state.nodeStatuses);
-      nextNodeStatuses.set(payload.nodeId, "verified");
-      return Effect.succeed({ ...state, nodeStatuses: nextNodeStatuses });
+      const nextNodeMeta = new Map(state.nodeMeta);
+      const prevVerifiedMeta = nextNodeMeta.get(payload.nodeId);
+      nextNodeMeta.set(payload.nodeId, {
+        ...(prevVerifiedMeta ?? {}),
+        status: "verified",
+        verifiedAt: payload.occurredAt,
+      });
+      return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
     case "weave.node-failed": {
       if (state === null) {
@@ -206,9 +216,15 @@ export function projectWeaveEvent(
         );
       }
       const { payload } = event;
-      const nextNodeStatuses = new Map(state.nodeStatuses);
-      nextNodeStatuses.set(payload.nodeId, "failed");
-      return Effect.succeed({ ...state, nodeStatuses: nextNodeStatuses });
+      const nextNodeMeta = new Map(state.nodeMeta);
+      const prevFailedMeta = nextNodeMeta.get(payload.nodeId);
+      nextNodeMeta.set(payload.nodeId, {
+        ...(prevFailedMeta ?? {}),
+        status: "failed",
+        failedAt: payload.occurredAt,
+        failureReason: payload.reason,
+      });
+      return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
     case "weave.decision-resolved": {
       if (state === null) {

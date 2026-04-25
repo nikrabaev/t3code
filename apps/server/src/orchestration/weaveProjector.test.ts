@@ -6,6 +6,7 @@ import {
   ThreadId,
   WeaveDecisionId,
   WeaveNodeId,
+  type WeaveNodeMeta,
   WeavePhaseId,
   WeaveRunId,
 } from "@t3tools/contracts";
@@ -55,7 +56,7 @@ describe("projectWeaveEvent — weave.created", () => {
     expect(result.run.status).toBe("draft");
     expect(result.run.concurrencyCap).toBe(1);
     expect(result.currentBlueprint).toBeNull();
-    expect(result.nodeStatuses.size).toBe(0);
+    expect(result.nodeMeta.size).toBe(0);
     expect(result.openDecisions.size).toBe(0);
     expect(result.autoDecisionLog.length).toBe(0);
     expect(result.phaseApprovals.size).toBe(0);
@@ -105,7 +106,7 @@ describe("projectWeaveEvent — weave.created", () => {
 });
 
 describe("projectWeaveEvent — weave.blueprint-compiled", () => {
-  it("sets currentBlueprint, transitions to reviewing, hydrates nodeStatuses and openDecisions", async () => {
+  it("sets currentBlueprint, transitions to reviewing, hydrates nodeMeta and openDecisions", async () => {
     const createdEvent = weaveEvent("weave.created", {
       weaveRunId: WeaveRunId.make("run-1"),
       projectId: ProjectId.make("project-1"),
@@ -177,8 +178,8 @@ describe("projectWeaveEvent — weave.blueprint-compiled", () => {
 
     expect(result.run.status).toBe("reviewing");
     expect(result.currentBlueprint?.version).toBe(BlueprintVersion.make(1));
-    expect(result.nodeStatuses.get(WeaveNodeId.make("node-1"))).toBe("pending");
-    expect(result.nodeStatuses.get(WeaveNodeId.make("node-2"))).toBe("pending");
+    expect(result.nodeMeta.get(WeaveNodeId.make("node-1"))?.status).toBe("pending");
+    expect(result.nodeMeta.get(WeaveNodeId.make("node-2"))?.status).toBe("pending");
     expect(result.openDecisions.has(WeaveDecisionId.make("decision-1"))).toBe(true);
   });
 
@@ -341,7 +342,8 @@ describe("projectWeaveEvent — node lifecycle", () => {
       occurredAt: now,
     });
     const result = await Effect.runPromise(projectWeaveEvent(state, dispatched));
-    expect(result.nodeStatuses.get(nodeId)).toBe("running");
+    expect(result.nodeMeta.get(nodeId)?.status).toBe("running");
+    expect(result.nodeMeta.get(nodeId)?.dispatchedAt).toBe(now);
     expect(result.childThreads.get(nodeId)?.threadId).toBe(ThreadId.make("thread-1"));
     expect(result.childThreads.get(nodeId)?.worktreePath).toBe("/tmp/wt/node-1");
   });
@@ -364,7 +366,10 @@ describe("projectWeaveEvent — node lifecycle", () => {
       occurredAt: now,
     });
     const result = await Effect.runPromise(projectWeaveEvent(running, verified));
-    expect(result.nodeStatuses.get(nodeId)).toBe("verified");
+    expect(result.nodeMeta.get(nodeId)?.status).toBe("verified");
+    expect(result.nodeMeta.get(nodeId)?.verifiedAt).toBe(now);
+    // dispatchedAt should be preserved from the dispatched event
+    expect(result.nodeMeta.get(nodeId)?.dispatchedAt).toBe(now);
   });
 
   it("weave.node-failed flips nodeStatus to failed", async () => {
@@ -385,7 +390,50 @@ describe("projectWeaveEvent — node lifecycle", () => {
       occurredAt: now,
     });
     const result = await Effect.runPromise(projectWeaveEvent(running, failed));
-    expect(result.nodeStatuses.get(nodeId)).toBe("failed");
+    expect(result.nodeMeta.get(nodeId)?.status).toBe("failed");
+    expect(result.nodeMeta.get(nodeId)?.failedAt).toBe(now);
+    expect(result.nodeMeta.get(nodeId)?.failureReason).toBe("Verifier exit 1");
+    // dispatchedAt should be preserved from the dispatched event
+    expect(result.nodeMeta.get(nodeId)?.dispatchedAt).toBe(now);
+  });
+
+  it("weave.node-failed populates failureReason and failedAt (positive test)", async () => {
+    const nodeId = WeaveNodeId.make("node-1");
+    const state = await runningProjectionWithNode(nodeId);
+    const dispatchedAt = "2026-04-25T10:00:00.000Z";
+    const failedAt = "2026-04-25T10:05:00.000Z";
+    const dispatched = weaveEvent(
+      "weave.node-dispatched",
+      {
+        weaveRunId: WeaveRunId.make("run-1"),
+        nodeId,
+        childThreadId: ThreadId.make("thread-1"),
+        worktreePath: "/tmp/wt/node-1",
+        occurredAt: dispatchedAt,
+      },
+      { occurredAt: dispatchedAt },
+    );
+    const running = await Effect.runPromise(projectWeaveEvent(state, dispatched));
+    const failReason = "Process exited with code 2: assertion failed in test suite";
+    const failed = weaveEvent(
+      "weave.node-failed",
+      {
+        weaveRunId: WeaveRunId.make("run-1"),
+        nodeId,
+        reason: failReason,
+        occurredAt: failedAt,
+      },
+      { occurredAt: failedAt },
+    );
+    const result = await Effect.runPromise(projectWeaveEvent(running, failed));
+    const meta: WeaveNodeMeta | undefined = result.nodeMeta.get(nodeId);
+    expect(meta?.status).toBe("failed");
+    expect(meta?.failedAt).toBe(failedAt);
+    expect(meta?.failureReason).toBe(failReason);
+    // dispatchedAt is preserved across the failed transition
+    expect(meta?.dispatchedAt).toBe(dispatchedAt);
+    // verifiedAt is absent
+    expect(meta?.verifiedAt).toBeUndefined();
   });
 });
 

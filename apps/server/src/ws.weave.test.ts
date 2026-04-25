@@ -212,18 +212,15 @@ describe("ws.weave RPC integration", () => {
       const projectId = ProjectId.make("unit-test-project");
       const createdAt = "2026-04-24T00:00:00.000Z" as const;
 
-      const nodeStatuses = new Map([
-        [WeaveNodeId.make("n1"), "pending" as const],
-        [WeaveNodeId.make("n2"), "pending" as const],
-        [WeaveNodeId.make("n3"), "ready" as const],
-        [WeaveNodeId.make("n4"), "running" as const],
-        [WeaveNodeId.make("n5"), "verified" as const],
-        [WeaveNodeId.make("n6"), "failed" as const],
-        [WeaveNodeId.make("n7"), "paused" as const],
-      ]) as ReadonlyMap<
-        ReturnType<typeof WeaveNodeId.make>,
-        "pending" | "ready" | "running" | "verified" | "failed" | "paused"
-      >;
+      const nodeMeta = new Map([
+        [WeaveNodeId.make("n1"), { status: "pending" as const }],
+        [WeaveNodeId.make("n2"), { status: "pending" as const }],
+        [WeaveNodeId.make("n3"), { status: "ready" as const }],
+        [WeaveNodeId.make("n4"), { status: "running" as const }],
+        [WeaveNodeId.make("n5"), { status: "verified" as const }],
+        [WeaveNodeId.make("n6"), { status: "failed" as const }],
+        [WeaveNodeId.make("n7"), { status: "paused" as const }],
+      ]);
 
       const projection: WeaveRunProjection = {
         run: {
@@ -236,7 +233,7 @@ describe("ws.weave RPC integration", () => {
           createdAt,
         },
         currentBlueprint: null,
-        nodeStatuses,
+        nodeMeta,
         openDecisions: new Set(),
         autoDecisionLog: [],
         phaseApprovals: new Map(),
@@ -300,8 +297,8 @@ describe("ws.weave RPC integration", () => {
         expect(projection?.run.title).toBe("Shell Snapshot Test Weave");
         expect(projection?.run.status).toBe("draft");
         expect(projection?.run.createdAt).toBe(createdAt);
-        // No node statuses yet — all counts would be 0 in the shell summary.
-        expect(projection?.nodeStatuses.size).toBe(0);
+        // No node meta yet — all counts would be 0 in the shell summary.
+        expect(projection?.nodeMeta.size).toBe(0);
       } finally {
         await system.dispose();
       }

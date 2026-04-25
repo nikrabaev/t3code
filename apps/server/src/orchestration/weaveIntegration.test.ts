@@ -436,9 +436,9 @@ describe("Weave Run end-to-end", () => {
     expect(projection?.run.status).toBe("complete");
 
     // All 3 nodes must be "verified"
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("scaffold"))).toBe("verified");
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("contract"))).toBe("verified");
-    expect(projection?.nodeStatuses.get(WeaveNodeId.make("raw"))).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("scaffold"))?.status).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("contract"))?.status).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("raw"))?.status).toBe("verified");
 
     // Scheduler must have allocated 3 worktrees (one per node)
     expect(system.stubGit.worktreeCalls).toHaveLength(3);

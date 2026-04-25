@@ -138,7 +138,7 @@ export function buildWeaveRunShell(projection: WeaveRunProjection): Orchestratio
   let runningCount = 0;
   let verifiedCount = 0;
   let failedCount = 0;
-  for (const status of projection.nodeStatuses.values()) {
+  for (const { status } of projection.nodeMeta.values()) {
     switch (status) {
       case "pending":
         pendingCount++;
