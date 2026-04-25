@@ -415,6 +415,19 @@ export const WeavePlannerThreadCreatedPayload = Schema.Struct({
 });
 export type WeavePlannerThreadCreatedPayload = typeof WeavePlannerThreadCreatedPayload.Type;
 
+// --- WeaveNodeMeta ---
+// Per-node runtime metadata surfaced in the projection. Extends status with
+// timestamps and failure reason so the UI can render per-node detail without
+// re-querying the event log.
+export const WeaveNodeMeta = Schema.Struct({
+  status: WeaveNodeStatus,
+  dispatchedAt: Schema.optional(IsoDateTime),
+  verifiedAt: Schema.optional(IsoDateTime),
+  failedAt: Schema.optional(IsoDateTime),
+  failureReason: Schema.optional(Schema.String),
+});
+export type WeaveNodeMeta = typeof WeaveNodeMeta.Type;
+
 // --- WeaveRunProjection ---
 // The accumulated read-model state for one WeaveRun. Promoted to contracts in
 // Slice 3 Task 3 so OrchestrationReadModel.weaveRuns can reference the schema.
@@ -426,8 +439,8 @@ export type WeavePlannerThreadCreatedPayload = typeof WeavePlannerThreadCreatedP
 export const WeaveRunProjectionSchema = Schema.Struct({
   run: WeaveRun,
   currentBlueprint: Schema.NullOr(Blueprint),
-  // ReadonlyMap<WeaveNodeId, WeaveNodeStatus>
-  nodeStatuses: Schema.ReadonlyMap(WeaveNodeId, WeaveNodeStatus),
+  // ReadonlyMap<WeaveNodeId, WeaveNodeMeta>
+  nodeMeta: Schema.ReadonlyMap(WeaveNodeId, WeaveNodeMeta),
   // ReadonlySet<WeaveDecisionId>
   openDecisions: Schema.ReadonlySet(WeaveDecisionId),
   autoDecisionLog: Schema.Array(

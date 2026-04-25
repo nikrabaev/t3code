@@ -888,3 +888,113 @@ it.effect("rejects WeavePlannerThreadCreatedPayload with missing threadId", () =
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+import { WeaveNodeMeta, WeaveRunProjectionSchema } from "./weave.ts";
+
+const decodeWeaveNodeMeta = Schema.decodeUnknownEffect(WeaveNodeMeta);
+const decodeWeaveRunProjection = Schema.decodeUnknownEffect(WeaveRunProjectionSchema);
+
+it.effect("round-trips WeaveNodeMeta with status only", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeMeta({ status: "pending" });
+    assert.strictEqual(parsed.status, "pending");
+    assert.strictEqual(parsed.dispatchedAt, undefined);
+    assert.strictEqual(parsed.verifiedAt, undefined);
+    assert.strictEqual(parsed.failedAt, undefined);
+    assert.strictEqual(parsed.failureReason, undefined);
+  }),
+);
+
+it.effect("round-trips WeaveNodeMeta with status running + dispatchedAt", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeMeta({
+      status: "running",
+      dispatchedAt: "2026-04-25T10:00:00.000Z",
+    });
+    assert.strictEqual(parsed.status, "running");
+    assert.strictEqual(parsed.dispatchedAt, "2026-04-25T10:00:00.000Z");
+    assert.strictEqual(parsed.verifiedAt, undefined);
+    assert.strictEqual(parsed.failedAt, undefined);
+    assert.strictEqual(parsed.failureReason, undefined);
+  }),
+);
+
+it.effect("round-trips WeaveNodeMeta with status failed + failedAt + failureReason", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveNodeMeta({
+      status: "failed",
+      dispatchedAt: "2026-04-25T10:00:00.000Z",
+      failedAt: "2026-04-25T10:30:00.000Z",
+      failureReason: "Verifier exited with code 1",
+    });
+    assert.strictEqual(parsed.status, "failed");
+    assert.strictEqual(parsed.dispatchedAt, "2026-04-25T10:00:00.000Z");
+    assert.strictEqual(parsed.failedAt, "2026-04-25T10:30:00.000Z");
+    assert.strictEqual(parsed.failureReason, "Verifier exited with code 1");
+    assert.strictEqual(parsed.verifiedAt, undefined);
+  }),
+);
+
+it.effect("round-trips WeaveRunProjectionSchema with empty nodeMeta", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRunProjection({
+      run: {
+        id: "run-1",
+        projectId: "project-1",
+        title: "Add blog",
+        vision: "# Goal",
+        status: "running",
+        concurrencyCap: 1,
+        createdAt: "2026-04-25T00:00:00.000Z",
+      },
+      currentBlueprint: null,
+      nodeMeta: new Map(),
+      openDecisions: new Set(),
+      autoDecisionLog: [],
+      phaseApprovals: new Map(),
+      childThreads: new Map(),
+    });
+    assert.strictEqual(parsed.run.id, "run-1");
+    assert.strictEqual(parsed.nodeMeta.size, 0);
+  }),
+);
+
+it.effect("round-trips WeaveRunProjectionSchema with populated nodeMeta entries", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRunProjection({
+      run: {
+        id: "run-2",
+        projectId: "project-1",
+        title: "Add blog",
+        vision: "# Goal",
+        status: "running",
+        concurrencyCap: 2,
+        createdAt: "2026-04-25T00:00:00.000Z",
+      },
+      currentBlueprint: null,
+      nodeMeta: new Map([
+        ["node-1", { status: "running", dispatchedAt: "2026-04-25T10:00:00.000Z" }],
+        [
+          "node-2",
+          {
+            status: "failed",
+            dispatchedAt: "2026-04-25T09:00:00.000Z",
+            failedAt: "2026-04-25T09:30:00.000Z",
+            failureReason: "Contract amendment needed",
+          },
+        ],
+      ]),
+      openDecisions: new Set(),
+      autoDecisionLog: [],
+      phaseApprovals: new Map(),
+      childThreads: new Map(),
+    });
+    assert.strictEqual(parsed.nodeMeta.size, 2);
+    const node1 = parsed.nodeMeta.get("node-1" as Parameters<typeof parsed.nodeMeta.get>[0]);
+    assert.strictEqual(node1?.status, "running");
+    assert.strictEqual(node1?.dispatchedAt, "2026-04-25T10:00:00.000Z");
+    const node2 = parsed.nodeMeta.get("node-2" as Parameters<typeof parsed.nodeMeta.get>[0]);
+    assert.strictEqual(node2?.status, "failed");
+    assert.strictEqual(node2?.failureReason, "Contract amendment needed");
+  }),
+);
