@@ -55,19 +55,18 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
           </div>
         )}
       </header>
-      <div className="flex-1 overflow-hidden">
-        {childThread ? (
-          <ChatView
-            environmentId={environmentId}
-            threadId={childThread.threadId}
-            routeKind="server"
-          />
-        ) : (
-          <div className="p-4 text-muted-foreground text-sm">
-            This node hasn't been dispatched yet.
-          </div>
-        )}
-      </div>
+      {childThread ? (
+        <ChatView
+          environmentId={environmentId}
+          threadId={childThread.threadId}
+          routeKind="server"
+          hideHeader
+        />
+      ) : (
+        <div className="p-4 text-muted-foreground text-sm">
+          This node hasn't been dispatched yet.
+        </div>
+      )}
     </div>
   );
 }
