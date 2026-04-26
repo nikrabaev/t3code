@@ -288,10 +288,30 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   yield* projectionPipeline.bootstrap;
   readModel = yield* projectionSnapshotQuery.getSnapshot();
 
+  // The SQL projection doesn't persist Weave run state yet (deferred Task 4),
+  // so getSnapshot() always returns weaveRuns: empty Map. Rehydrate by
+  // replaying weave-only events from the event log via readFromSequence(0)
+  // (the bootstrap-friendly path; readAll is reserved for diagnostics and
+  // is intentionally guarded against during normal startup). projectEvent's
+  // weave case handles each event. Skips non-weave events so the rest of
+  // the (already-hydrated) read model is left untouched.
+  yield* eventStore.readFromSequence(0).pipe(
+    Stream.filter((event) => event.type.startsWith("weave.")),
+    Stream.runForEach((event) =>
+      Effect.gen(function* () {
+        const next = yield* projectEvent(readModel, event).pipe(Effect.orDie);
+        readModel = next;
+      }),
+    ),
+  );
+
   const worker = Effect.forever(Queue.take(commandQueue).pipe(Effect.flatMap(processEnvelope)));
   yield* Effect.forkScoped(worker);
   yield* Effect.logDebug("orchestration engine started").pipe(
-    Effect.annotateLogs({ sequence: readModel.snapshotSequence }),
+    Effect.annotateLogs({
+      sequence: readModel.snapshotSequence,
+      weaveRunCount: readModel.weaveRuns.size,
+    }),
   );
 
   const getReadModel: OrchestrationEngineShape["getReadModel"] = () =>
