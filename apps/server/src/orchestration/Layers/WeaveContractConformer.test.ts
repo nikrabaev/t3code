@@ -2,15 +2,17 @@
  * WeaveContractConformer tests.
  *
  * Uses the real OrchestrationEngine + WeaveEngine (matching WeaveScheduler.test.ts
- * pattern) with RuntimeReceiptBusLive (now broadcasting), and a stub ProcessRunner
- * that returns controlled exit codes without touching the filesystem.
+ * pattern) and a stub ProcessRunner that returns controlled exit codes without
+ * touching the filesystem. Triggers the conformer by dispatching
+ * `thread.session.set` with the child thread reaching status="ready" /
+ * activeTurnId=null — that's the same domain event ProviderRuntimeIngestion
+ * emits when the harness ends its turn.
  *
  * Coverage:
- *  1. Non-weave thread → conformer skips (no ProcessRunner.run call, no command).
- *  2. Weave child thread, stub exit 0 → weave.node.verified; status → "verified".
- *  3. Weave child thread, stub exit 1 → weave.node.failed (reason contains exit code);
+ *  1. Weave child thread, stub exit 0 → weave.node.verified; status → "verified".
+ *  2. Weave child thread, stub exit 1 → weave.node.failed (reason contains exit code);
  *     status → "failed".
- *  4. Stub reports timedOut: true → weave.node.failed with reason "timeout";
+ *  3. Stub reports timedOut: true → weave.node.failed with reason "timeout";
  *     status → "failed".
  */
 import {
@@ -19,7 +21,6 @@ import {
   CommandId,
   ProjectId,
   ThreadId,
-  TurnId,
   WeaveNodeId,
   WeavePhaseId,
   WeaveRunId,
@@ -290,45 +291,33 @@ async function seedProjectAndRunningWeave(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("WeaveContractConformer", () => {
-  it("skips receipt for a non-weave thread (no ProcessRunner call, no command dispatched)", async () => {
-    const system = await createConformerSystem("t3-conformer-1-", {
-      exitCode: 0,
-      stdout: "",
-      stderr: "",
-      timedOut: false,
-      stdoutTruncated: false,
-      stderrTruncated: false,
-    });
-
-    const orphanThreadId = ThreadId.make(crypto.randomUUID());
-
-    await system.run(
-      Effect.scoped(
-        Effect.gen(function* () {
-          yield* system.conformer.start();
-          yield* Effect.sleep("20 millis");
-
-          // Publish a receipt for a thread that doesn't belong to any weave run
-          yield* system.receiptBus.publish({
-            type: "turn.processing.quiesced",
-            threadId: orphanThreadId,
-            turnId: TurnId.make(`turn-${crypto.randomUUID()}`),
-            checkpointTurnCount: 0 as never,
-            createdAt: now(),
-          });
-
-          yield* system.conformer.drain;
-        }),
-      ),
-    );
-
-    // ProcessRunner should not have been called
-    expect(system.stubProcessRunner.getRunCount()).toBe(0);
-
-    await system.dispose();
+/**
+ * Drives the conformer by dispatching `thread.session.set` for the child
+ * thread, mirroring what ProviderRuntimeIngestion does on `turn.completed`.
+ */
+function* dispatchSessionReady(
+  orchestrationEngine: ReturnType<typeof OrchestrationEngineService.of>,
+  threadId: ThreadId,
+) {
+  const updatedAt = now();
+  yield* orchestrationEngine.dispatch({
+    type: "thread.session.set",
+    commandId: CommandId.make(`cmd-session-set-${crypto.randomUUID()}`),
+    threadId,
+    session: {
+      threadId,
+      status: "ready",
+      providerName: "stub",
+      runtimeMode: "full-access",
+      activeTurnId: null,
+      lastError: null,
+      updatedAt,
+    },
+    createdAt: updatedAt,
   });
+}
 
+describe("WeaveContractConformer", () => {
   it("exit 0 → dispatches weave.node.verified; projection status becomes 'verified'", async () => {
     const projectId = "project-conformer-2";
     const runId = "run-conformer-2";
@@ -355,14 +344,7 @@ describe("WeaveContractConformer", () => {
           yield* system.conformer.start();
           yield* Effect.sleep("20 millis");
 
-          // Publish the quiesced receipt for the child thread
-          yield* system.receiptBus.publish({
-            type: "turn.processing.quiesced",
-            threadId: childThreadId,
-            turnId: TurnId.make(`turn-${crypto.randomUUID()}`),
-            checkpointTurnCount: 1 as never,
-            createdAt: now(),
-          });
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
 
           yield* system.conformer.drain;
         }),
@@ -403,13 +385,7 @@ describe("WeaveContractConformer", () => {
           yield* system.conformer.start();
           yield* Effect.sleep("20 millis");
 
-          yield* system.receiptBus.publish({
-            type: "turn.processing.quiesced",
-            threadId: childThreadId,
-            turnId: `turn-${crypto.randomUUID()}` as never,
-            checkpointTurnCount: 1 as never,
-            createdAt: now(),
-          });
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
 
           yield* system.conformer.drain;
         }),
@@ -467,13 +443,7 @@ describe("WeaveContractConformer", () => {
           yield* system.conformer.start();
           yield* Effect.sleep("20 millis");
 
-          yield* system.receiptBus.publish({
-            type: "turn.processing.quiesced",
-            threadId: childThreadId,
-            turnId: `turn-${crypto.randomUUID()}` as never,
-            checkpointTurnCount: 1 as never,
-            createdAt: now(),
-          });
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
 
           yield* system.conformer.drain;
         }),

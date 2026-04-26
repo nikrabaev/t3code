@@ -1,10 +1,19 @@
 /**
  * WeaveContractConformerLive - Layer implementation of WeaveContractConformer.
  *
- * Processing loop (per turn.processing.quiesced receipt):
- *  1. Fetch the current read model and reverse-lookup the thread ID across all
- *     weave runs via `childThreads`. O(runs × nodes) — acceptable for v0.1.
- *  2. If no match, skip (non-weave thread).
+ * Processing triggers:
+ *  - `thread.session-set` where the new session reports `status === "ready"`
+ *    and `activeTurnId === null` — the LLM and harness have ended their
+ *    turns and the child thread is no longer running. This is what we want;
+ *    earlier signals (e.g. `turn.processing.quiesced`) fire mid-conversation
+ *    on multi-turn agents and would run the verifier prematurely.
+ *  - `weave.node-retry-requested` — the user clicked Retry on a failed node.
+ *    Re-runs the verifier in the existing worktree without re-dispatching
+ *    the agent.
+ *
+ * Per trigger:
+ *  1. Resolve the (weaveRunId, nodeId, worktreePath) for the trigger.
+ *  2. If no match (non-weave thread for the session-set trigger), skip.
  *  3. Resolve the verifier command (node override → project default →
  *     hardcoded `bun run test`) and run it in the node's worktree path
  *     (capped at 120 seconds). Argv split is whitespace-only; users with
@@ -20,14 +29,12 @@ import { Cause, Effect, Layer, Stream } from "effect";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
-import { RuntimeReceiptBus } from "../Services/RuntimeReceiptBus.ts";
 import { WeaveEngineService } from "../Services/WeaveEngine.ts";
 import { ProcessRunner } from "../Services/ProcessRunner.ts";
 import {
   WeaveContractConformer,
   type WeaveContractConformerShape,
 } from "../Services/WeaveContractConformer.ts";
-import type { TurnProcessingQuiescedReceipt } from "../Services/RuntimeReceiptBus.ts";
 
 const VERIFIER_TIMEOUT_MS = 120_000;
 const DEFAULT_VERIFIER_COMMAND = "bun run test";
@@ -168,29 +175,28 @@ function findWeaveNodeById(
 // ── Trigger union ─────────────────────────────────────────────────────────────
 
 type ConformerTrigger =
-  | { readonly kind: "quiesced"; readonly threadId: string }
+  | { readonly kind: "session-ready"; readonly threadId: string }
   | { readonly kind: "retry"; readonly weaveRunId: WeaveRunId; readonly nodeId: WeaveNodeId };
 
 // ── Layer ─────────────────────────────────────────────────────────────────────
 
 const make = Effect.gen(function* () {
-  const receiptBus = yield* RuntimeReceiptBus;
   const weaveEngine = yield* WeaveEngineService;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const processRunner = yield* ProcessRunner;
 
   const processItem = (trigger: ConformerTrigger) =>
     Effect.gen(function* () {
-      // Step 1: find the weave node either by thread (turn.processing.quiesced)
-      // or by run+node id (weave.node-retry-requested).
+      // Step 1: find the weave node either by thread id (session-ready) or by
+      // run+node id (retry-requested).
       const readModel = yield* orchestrationEngine.getReadModel();
       const match =
-        trigger.kind === "quiesced"
+        trigger.kind === "session-ready"
           ? findWeaveNodeForThread(readModel.weaveRuns, trigger.threadId)
           : findWeaveNodeById(readModel.weaveRuns, trigger.weaveRunId, trigger.nodeId);
 
       if (match === null) {
-        if (trigger.kind === "quiesced") {
+        if (trigger.kind === "session-ready") {
           // Not a weave child thread — skip silently.
           yield* Effect.log("WeaveContractConformer: non-weave thread, skipping", {
             threadId: trigger.threadId,
@@ -201,6 +207,19 @@ const make = Effect.gen(function* () {
             nodeId: trigger.nodeId,
           });
         }
+        return;
+      }
+
+      // Skip if the node isn't currently running (e.g. status flipped to
+      // verified/failed concurrently). Only running nodes need verification.
+      const currentMeta = readModel.weaveRuns.get(match.weaveRunId)?.nodeMeta.get(match.nodeId);
+      if (currentMeta?.status !== "running") {
+        yield* Effect.log("WeaveContractConformer: node not running, skipping", {
+          weaveRunId: match.weaveRunId,
+          nodeId: match.nodeId,
+          status: currentMeta?.status ?? "unknown",
+          triggerKind: trigger.kind,
+        });
         return;
       }
 
@@ -307,15 +326,27 @@ const make = Effect.gen(function* () {
 
   const start: WeaveContractConformerShape["start"] = () =>
     Effect.gen(function* () {
-      // turn.processing.quiesced — child agent finished its turn → run verifier.
+      // thread.session-set with status === "ready" + activeTurnId null —
+      // the LLM and harness ended their turns. This is the "agent truly
+      // done" hook; turn.processing.quiesced fired mid-conversation on
+      // multi-turn agents and would run the verifier prematurely.
       yield* Effect.forkScoped(
         Stream.runForEach(
-          receiptBus.streamEvents.pipe(
+          orchestrationEngine.streamDomainEvents.pipe(
             Stream.filter(
-              (e): e is TurnProcessingQuiescedReceipt => e.type === "turn.processing.quiesced",
+              (e) =>
+                e.type === "thread.session-set" &&
+                e.payload.session.status === "ready" &&
+                e.payload.session.activeTurnId === null,
             ),
           ),
-          (receipt) => worker.enqueue({ kind: "quiesced" as const, threadId: receipt.threadId }),
+          (event) =>
+            event.type === "thread.session-set"
+              ? worker.enqueue({
+                  kind: "session-ready" as const,
+                  threadId: event.payload.threadId,
+                })
+              : Effect.void,
         ),
       );
       // weave.node-retry-requested — user asked to re-run the verifier on a
