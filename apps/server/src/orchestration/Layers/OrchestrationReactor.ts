@@ -11,6 +11,7 @@ import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import { WeavePlanner } from "../Services/WeavePlanner.ts";
 import { WeaveScheduler } from "../Services/WeaveScheduler.ts";
 import { WeaveContractConformer } from "../Services/WeaveContractConformer.ts";
+import { WeaveNodeRestarter } from "../Services/WeaveNodeRestarter.ts";
 
 export const makeOrchestrationReactor = Effect.gen(function* () {
   const providerRuntimeIngestion = yield* ProviderRuntimeIngestionService;
@@ -20,6 +21,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const weavePlanner = yield* WeavePlanner;
   const weaveScheduler = yield* WeaveScheduler;
   const weaveContractConformer = yield* WeaveContractConformer;
+  const weaveNodeRestarter = yield* WeaveNodeRestarter;
 
   const start: OrchestrationReactorShape["start"] = Effect.fn("start")(function* () {
     yield* providerRuntimeIngestion.start();
@@ -29,6 +31,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
     yield* weavePlanner.start();
     yield* weaveScheduler.start();
     yield* weaveContractConformer.start();
+    yield* weaveNodeRestarter.start();
   });
 
   return {

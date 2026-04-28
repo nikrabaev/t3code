@@ -755,7 +755,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "weave.node.dispatch":
     case "weave.node.verified":
     case "weave.node.failed":
-    case "weave.node.retry": {
+    case "weave.node.retry":
+    case "weave.node.restart": {
       const runId = command.weaveRunId;
       const projection = readModel.weaveRuns.get(runId) ?? null;
       const plannedEvents = yield* decideWeaveCommand({ projection, command });

@@ -850,3 +850,99 @@ describe("decideWeaveCommand — weave.phase.approve", () => {
     ).rejects.toThrow("expected 'pending'");
   });
 });
+
+describe("decideWeaveCommand — weave.node.retry", () => {
+  it("emits weave.node-retry-requested when node is failed", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "failed" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.retry",
+          commandId: CommandId.make("cmd-retry"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-retry-requested");
+    const first = events[0];
+    if (first !== undefined && first.type === "weave.node-retry-requested") {
+      expect(first.payload.nodeId).toBe(WeaveNodeId.make("node-1"));
+    }
+  });
+
+  it("rejects when node is not failed", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "running" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.retry",
+            commandId: CommandId.make("cmd-retry"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("status is 'running'");
+  });
+});
+
+describe("decideWeaveCommand — weave.node.restart", () => {
+  it("emits weave.node-restart-requested when node is failed", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "failed" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: p,
+        command: {
+          type: "weave.node.restart",
+          commandId: CommandId.make("cmd-restart"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          nodeId: WeaveNodeId.make("node-1"),
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.node-restart-requested");
+    const first = events[0];
+    if (first !== undefined && first.type === "weave.node-restart-requested") {
+      expect(first.payload.nodeId).toBe(WeaveNodeId.make("node-1"));
+    }
+  });
+
+  it("rejects when node is not failed", async () => {
+    const p = buildRunningProjection({
+      nodes: [{ id: "node-1", status: "verified" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: p,
+          command: {
+            type: "weave.node.restart",
+            commandId: CommandId.make("cmd-restart"),
+            weaveRunId: WeaveRunId.make("run-1"),
+            nodeId: WeaveNodeId.make("node-1"),
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow("status is 'verified'");
+  });
+});

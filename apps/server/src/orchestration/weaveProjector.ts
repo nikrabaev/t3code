@@ -322,6 +322,33 @@ export function projectWeaveEvent(
       });
       return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
+    case "weave.node-restart-requested": {
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.node-restart-requested requires existing projection (null received).`,
+          }),
+        );
+      }
+      const { payload } = event;
+      const nextNodeMeta = new Map(state.nodeMeta);
+      const prevMeta = nextNodeMeta.get(payload.nodeId);
+      // Reset failure fields and flip back to "running" so the restarter
+      // reactor re-dispatches the agent on the existing child thread.
+      const {
+        failureReason: _droppedReason,
+        failureOutput: _droppedOutput,
+        failedAt: _droppedFailedAt,
+        verifiedAt: _droppedVerifiedAt,
+        ...rest
+      } = prevMeta ?? { status: "pending" as const };
+      nextNodeMeta.set(payload.nodeId, {
+        ...rest,
+        status: "running",
+      });
+      return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
+    }
     default: {
       const _exhaustive: never = event;
       void _exhaustive;

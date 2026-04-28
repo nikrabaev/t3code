@@ -12,6 +12,7 @@ import { ProcessRunnerLive } from "./Layers/ProcessRunner.ts";
 import { RuntimeReceiptBusLive } from "./Layers/RuntimeReceiptBus.ts";
 import { WeaveContractConformerLive } from "./Layers/WeaveContractConformer.ts";
 import { WeaveEngineLive } from "./Layers/WeaveEngine.ts";
+import { WeaveNodeRestarterLive } from "./Layers/WeaveNodeRestarter.ts";
 import { WeavePlannerLive } from "./Layers/WeavePlanner.ts";
 import { WeaveSchedulerLive } from "./Layers/WeaveScheduler.ts";
 
@@ -49,6 +50,11 @@ const WeaveContractConformerFull = WeaveContractConformerLive.pipe(
   Layer.provide(ProcessRunnerLive),
 );
 
+const WeaveNodeRestarterFull = WeaveNodeRestarterLive.pipe(
+  Layer.provide(WeaveEngineFull),
+  Layer.provide(OrchestrationEngineFull),
+);
+
 /**
  * Base orchestration layer — does NOT include WeavePlanner.
  *
@@ -68,6 +74,7 @@ export const OrchestrationLayerLive = Layer.mergeAll(
   WeaveSchedulerFull,
   ProcessRunnerLive,
   WeaveContractConformerFull,
+  WeaveNodeRestarterFull,
   RuntimeReceiptBusLive,
   GitCoreLive,
 );

@@ -269,6 +269,18 @@ export const WeaveNodeRetryCommand = Schema.Struct({
 export type WeaveNodeRetryCommand = typeof WeaveNodeRetryCommand.Type;
 export type WeaveExitCommand = typeof WeaveExitCommand.Type;
 
+// Re-dispatches the agent for a failed node by sending a fresh turn-start to
+// the existing child thread (the worktree + thread are reused). The verifier
+// runs automatically once the new turn quiesces.
+export const WeaveNodeRestartCommand = Schema.Struct({
+  type: Schema.Literal("weave.node.restart"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  createdAt: IsoDateTime,
+});
+export type WeaveNodeRestartCommand = typeof WeaveNodeRestartCommand.Type;
+
 export const WeaveDispatchableCommand = Schema.Union([
   WeaveCreateCommand,
   WeaveBlueprintApproveCommand,
@@ -276,6 +288,7 @@ export const WeaveDispatchableCommand = Schema.Union([
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
   WeaveNodeRetryCommand,
+  WeaveNodeRestartCommand,
 ]);
 export type WeaveDispatchableCommand = typeof WeaveDispatchableCommand.Type;
 
@@ -411,6 +424,13 @@ export const WeaveNodeRetryRequestedPayload = Schema.Struct({
   occurredAt: IsoDateTime,
 });
 export type WeaveNodeRetryRequestedPayload = typeof WeaveNodeRetryRequestedPayload.Type;
+
+export const WeaveNodeRestartRequestedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  nodeId: WeaveNodeId,
+  occurredAt: IsoDateTime,
+});
+export type WeaveNodeRestartRequestedPayload = typeof WeaveNodeRestartRequestedPayload.Type;
 
 export const WeaveDecisionResolvedPayload = Schema.Struct({
   weaveRunId: WeaveRunId,

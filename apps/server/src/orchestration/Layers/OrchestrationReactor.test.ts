@@ -6,6 +6,7 @@ import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
 import { WeaveContractConformer } from "../Services/WeaveContractConformer.ts";
+import { WeaveNodeRestarter } from "../Services/WeaveNodeRestarter.ts";
 import { WeavePlanner } from "../Services/WeavePlanner.ts";
 import { WeaveScheduler } from "../Services/WeaveScheduler.ts";
 import { OrchestrationReactor } from "../Services/OrchestrationReactor.ts";
@@ -21,7 +22,7 @@ describe("OrchestrationReactor", () => {
     runtime = null;
   });
 
-  it("starts provider ingestion, provider command, checkpoint, thread deletion, weave planner, weave scheduler, and weave contract conformer reactors", async () => {
+  it("starts provider ingestion, provider command, checkpoint, thread deletion, weave planner, weave scheduler, weave contract conformer, and weave node restarter reactors", async () => {
     const started: string[] = [];
 
     runtime = ManagedRuntime.make(
@@ -89,6 +90,15 @@ describe("OrchestrationReactor", () => {
             drain: Effect.void,
           }),
         ),
+        Layer.provideMerge(
+          Layer.succeed(WeaveNodeRestarter, {
+            start: () => {
+              started.push("weave-node-restarter");
+              return Effect.void;
+            },
+            drain: Effect.void,
+          }),
+        ),
       ),
     );
 
@@ -104,6 +114,7 @@ describe("OrchestrationReactor", () => {
       "weave-planner",
       "weave-scheduler",
       "weave-contract-conformer",
+      "weave-node-restarter",
     ]);
 
     await Effect.runPromise(Scope.close(scope, Exit.void));

@@ -115,8 +115,11 @@ function buildBranchName(runId: string, nodeId: WeaveNodeId): string {
 
 /**
  * Format the node spec as the user message text for the child thread turn.
+ *
+ * Exported so the WeaveNodeRestarter reactor uses the same prompt when
+ * re-dispatching the agent on a failed node.
  */
-function formatNodeSpec(node: WeaveNode): string {
+export function formatNodeSpec(node: WeaveNode): string {
   const lines: string[] = [`# Task: ${node.title}`, ""];
   if (node.description.trim().length > 0) {
     lines.push(node.description, "");

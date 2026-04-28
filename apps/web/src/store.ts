@@ -1258,6 +1258,28 @@ function applyWeaveEventToDetail(
         status: "failed",
         failedAt: payload.occurredAt,
         failureReason: payload.reason,
+        ...(payload.failureOutput !== undefined ? { failureOutput: payload.failureOutput } : {}),
+      });
+      return { ...detail, nodeMeta: nextNodeMeta };
+    }
+    case "weave.node-retry-requested":
+    case "weave.node-restart-requested": {
+      const { payload } = event;
+      const nextNodeMeta = new Map(detail.nodeMeta);
+      const prevMeta = nextNodeMeta.get(payload.nodeId);
+      // Strip failure fields and flip back to "running" so the inspector
+      // shows the in-flight state immediately. Keep dispatchedAt so the
+      // elapsed clock continues to reflect total time.
+      const {
+        failureReason: _droppedReason,
+        failureOutput: _droppedOutput,
+        failedAt: _droppedFailedAt,
+        verifiedAt: _droppedVerifiedAt,
+        ...rest
+      } = prevMeta ?? { status: "pending" as const };
+      nextNodeMeta.set(payload.nodeId, {
+        ...rest,
+        status: "running",
       });
       return { ...detail, nodeMeta: nextNodeMeta };
     }

@@ -37,7 +37,7 @@ import {
 } from "../Services/WeaveContractConformer.ts";
 
 const VERIFIER_TIMEOUT_MS = 120_000;
-const DEFAULT_VERIFIER_COMMAND = "bun run test";
+const DEFAULT_VERIFIER_COMMAND = "npm run test";
 const FAILURE_OUTPUT_BYTE_CAP = 16 * 1024;
 
 /**
@@ -266,6 +266,7 @@ const make = Effect.gen(function* () {
           nodeId,
           worktreePath,
           verifierCommand: resolvedCommand,
+          ...(failureOutput !== undefined ? { failureOutput } : {}),
         });
         yield* weaveEngine.dispatchWeaveCommand({
           type: "weave.node.failed",
@@ -299,6 +300,7 @@ const make = Effect.gen(function* () {
           nodeId,
           exitCode: result.exitCode,
           verifierCommand: resolvedCommand,
+          ...(failureOutput !== undefined ? { failureOutput } : {}),
         });
         yield* weaveEngine.dispatchWeaveCommand({
           type: "weave.node.failed",

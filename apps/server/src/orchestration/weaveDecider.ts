@@ -397,6 +397,31 @@ export function decideWeaveCommand(input: {
         ];
       });
     }
+    case "weave.node.restart": {
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+        yield* requireNodeStatus({
+          projection: run,
+          command,
+          nodeId: command.nodeId,
+          allowed: ["failed"],
+        });
+        return [
+          envelope({
+            type: "weave.node-restart-requested",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              nodeId: command.nodeId,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
+    }
     default: {
       const _exhaustive: never = command;
       void _exhaustive;

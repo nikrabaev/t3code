@@ -20,9 +20,11 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
   const node = weaveRunDetail.currentBlueprint?.nodes.find((n) => n.id === openNodeId) ?? null;
   const meta = weaveRunDetail.nodeMeta.get(openNodeId) ?? null;
   const [retryPending, setRetryPending] = useState(false);
+  const [restartPending, setRestartPending] = useState(false);
+  const anyPending = retryPending || restartPending;
 
   const handleRetry = async () => {
-    if (retryPending || meta?.status !== "failed") return;
+    if (anyPending || meta?.status !== "failed") return;
     setRetryPending(true);
     try {
       await dispatchWeaveCommand(environmentId, {
@@ -34,6 +36,22 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
       });
     } finally {
       setRetryPending(false);
+    }
+  };
+
+  const handleRestart = async () => {
+    if (anyPending || meta?.status !== "failed") return;
+    setRestartPending(true);
+    try {
+      await dispatchWeaveCommand(environmentId, {
+        type: "weave.node.restart",
+        commandId: CommandId.make(crypto.randomUUID()),
+        weaveRunId: weaveRunDetail.run.id,
+        nodeId: openNodeId,
+        createdAt: new Date().toISOString(),
+      });
+    } finally {
+      setRestartPending(false);
     }
   };
 
@@ -54,14 +72,26 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-red-600">Failed: {meta.failureReason}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleRetry()}
-                disabled={retryPending}
-              >
-                {retryPending ? "Retrying…" : "Retry verifier"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleRestart()}
+                  disabled={anyPending}
+                  title="Re-run the agent on the existing worktree"
+                >
+                  {restartPending ? "Restarting…" : "Restart node"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleRetry()}
+                  disabled={anyPending}
+                  title="Re-run the verifier only (skip the agent)"
+                >
+                  {retryPending ? "Retrying…" : "Retry verifier"}
+                </Button>
+              </div>
             </div>
             {meta?.failureOutput && (
               <details className="group rounded border border-red-600/30 bg-red-600/5">

@@ -60,6 +60,7 @@ import {
 } from "../src/orchestration/Services/OrchestrationEngine.ts";
 import { ThreadDeletionReactor } from "../src/orchestration/Services/ThreadDeletionReactor.ts";
 import { WeaveContractConformer } from "../src/orchestration/Services/WeaveContractConformer.ts";
+import { WeaveNodeRestarter } from "../src/orchestration/Services/WeaveNodeRestarter.ts";
 import { WeavePlanner } from "../src/orchestration/Services/WeavePlanner.ts";
 import { WeaveScheduler } from "../src/orchestration/Services/WeaveScheduler.ts";
 import { OrchestrationReactor } from "../src/orchestration/Services/OrchestrationReactor.ts";
@@ -375,6 +376,12 @@ export const makeOrchestrationIntegrationHarness = (
       ),
       Layer.provideMerge(
         Layer.succeed(WeaveContractConformer, {
+          start: () => Effect.void,
+          drain: Effect.void,
+        }),
+      ),
+      Layer.provideMerge(
+        Layer.succeed(WeaveNodeRestarter, {
           start: () => Effect.void,
           drain: Effect.void,
         }),
