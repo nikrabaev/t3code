@@ -1,31 +1,39 @@
 /**
- * End-to-end integration test: 3-Node Weave Run completes sequentially.
+ * End-to-end integration test: Weave Run with incremental planning completes.
  *
- * Proves spec §3.5 DoD bullet 3: "A Weave Run with a 3-Node Blueprint
- * (scaffold → contract → raw) completes sequentially against a stub provider."
- *
- * Architecture:
- *  - Real OrchestrationEngine + WeaveEngine + WeaveScheduler + WeaveContractConformer
- *  - Stub PlannerDriver: returns a 3-node blueprint (scaffold → contract → raw)
- *  - Stub ProcessRunner: always returns exit 0
+ * Drives a 2-Phase meta-plan flow through the full reactor stack:
+ *  - Real OrchestrationEngine + WeaveEngine + WeaveScheduler + WeaveContractConformer + WeavePlanner
+ *  - Stub PlannerDriver: returns the meta-Blueprint (2 Phases, 2 Planning Nodes, 0 Tasks)
+ *  - Stub ProcessRunner: returns exit 0 for every verifier invocation
  *  - Stub GitCore: records createWorktree calls; returns fake paths
- *  - Quiesce driver (inline): subscribes to streamDomainEvents, publishes
- *    turn.processing.quiesced to RuntimeReceiptBus for each
- *    thread.turn-start-requested event — simulating CheckpointReactor
- *    without a real provider.
+ *  - Smart turn driver: subscribes to thread.turn-start-requested. For each
+ *    event, looks up the owning Weave node. If kind === "planning", injects an
+ *    assistant message with the appropriate PhasePlannerOutput JSON. Then
+ *    dispatches thread.session.set { status: "ready" } — the conformer's
+ *    trigger event.
+ *  - Approval driver: polls for run.status === "reviewing" and dispatches
+ *    weave.blueprint.approve at the current version.
  *
- * Node ordering: scaffold → contract → raw (each depends on the previous).
- * After all 3 are verified the decider auto-transitions the run to "complete".
+ * Flow proven:
+ *   create → meta-compile (v1) → approve v1
+ *     → P1 planner dispatches → emits Tasks → blueprint-extend (v2) → reviewing
+ *     → approve v2 → P1 Tasks verify
+ *     → P2 planner dispatches (kind-stratified ready check) → emits Tasks
+ *     → blueprint-extend (v3) → reviewing
+ *     → approve v3 → P2 Tasks verify → run "complete"
  */
 import {
   Blueprint,
   BlueprintVersion,
   CommandId,
+  EventId,
+  MessageId,
   ProjectId,
-  TurnId,
+  ThreadId,
   WeaveNodeId,
   WeavePhaseId,
   WeaveRunId,
+  type WeaveRunProjection,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
@@ -56,7 +64,6 @@ import { WeaveEngineService } from "./Services/WeaveEngine.ts";
 import { WeaveScheduler } from "./Services/WeaveScheduler.ts";
 import { WeavePlanner } from "./Services/WeavePlanner.ts";
 import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
-import { RuntimeReceiptBus } from "./Services/RuntimeReceiptBus.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,67 +73,54 @@ function now() {
 
 const FAKE_WORKSPACE_ROOT = "/tmp/fake-workspace-e2e";
 
-// ── 3-Node Blueprint ─────────────────────────────────────────────────────────
+// ── 2-Phase meta-blueprint ───────────────────────────────────────────────────
 
-/**
- * Build the 3-node blueprint: scaffold → contract → raw (each depends on the previous).
- * All in a single phase. Returns both the Blueprint object and its JSON encoding.
- */
-function makeThreeNodeBlueprint(): { blueprint: Blueprint; rawJson: string } {
-  const phaseId = WeavePhaseId.make("phase-1");
-  const scaffoldId = WeaveNodeId.make("scaffold");
-  const contractId = WeaveNodeId.make("contract");
-  const rawId = WeaveNodeId.make("raw");
-
+function makeMetaBlueprintJson(): { rawJson: string } {
+  const phase1Id = WeavePhaseId.make("phase-1");
+  const phase2Id = WeavePhaseId.make("phase-2");
   const blueprint = Schema.decodeSync(Blueprint)({
     version: BlueprintVersion.make(1),
     nodes: [
       {
-        id: scaffoldId,
-        title: "Scaffold",
-        description: "Set up project structure",
-        kind: "scaffold",
-        phaseId,
+        id: WeaveNodeId.make("phase-1-planner"),
+        title: "Phase 1 Planner",
+        description: "Plan Phase 1",
+        kind: "planning",
+        phaseId: phase1Id,
         scope: { readSet: [], writeSet: [] },
         inputContractIds: [],
         outputContractIds: [],
-        verifierDescription: "Project structure in place",
+        verifierDescription: "PhasePlannerOutput JSON",
         dependsOn: [],
         status: "pending",
       },
       {
-        id: contractId,
-        title: "Contract",
-        description: "Author shared interfaces",
-        kind: "contract",
-        phaseId,
+        id: WeaveNodeId.make("phase-2-planner"),
+        title: "Phase 2 Planner",
+        description: "Plan Phase 2",
+        kind: "planning",
+        phaseId: phase2Id,
         scope: { readSet: [], writeSet: [] },
         inputContractIds: [],
         outputContractIds: [],
-        verifierDescription: "Interfaces compile",
-        dependsOn: [scaffoldId],
-        status: "pending",
-      },
-      {
-        id: rawId,
-        title: "Raw",
-        description: "Feature implementation",
-        kind: "raw",
-        phaseId,
-        scope: { readSet: [], writeSet: [] },
-        inputContractIds: [],
-        outputContractIds: [],
-        verifierDescription: "All tests pass",
-        dependsOn: [contractId],
+        verifierDescription: "PhasePlannerOutput JSON",
+        dependsOn: [],
         status: "pending",
       },
     ],
     phases: [
       {
-        id: phaseId,
+        id: phase1Id,
         ordinal: 0,
-        title: "Ship",
-        description: "Ship the feature",
+        title: "Phase 1",
+        description: "First Phase",
+        approval: "pending",
+      },
+      {
+        id: phase2Id,
+        ordinal: 1,
+        title: "Phase 2",
+        description: "Second Phase",
         approval: "pending",
       },
     ],
@@ -135,9 +129,52 @@ function makeThreeNodeBlueprint(): { blueprint: Blueprint; rawJson: string } {
     compiledAt: now(),
     compiledBy: "planner",
   });
+  return { rawJson: JSON.stringify(Schema.encodeSync(Blueprint)(blueprint)) };
+}
 
-  const rawJson = JSON.stringify(Schema.encodeSync(Blueprint)(blueprint));
-  return { blueprint, rawJson };
+/**
+ * The Phase-Planner JSON output for Phase 1: a single Task that depends on the
+ * planner node. Note `kind: "raw"` (not `"planning"` — Slice 3 forbids
+ * recursion); `phaseId: "phase-1"` (must equal the planner's phase).
+ */
+function phase1PlannerOutput(): string {
+  return JSON.stringify({
+    addedNodes: [
+      {
+        id: "phase-1-task-1",
+        title: "Phase 1 Task",
+        description: "First task in Phase 1",
+        kind: "raw",
+        phaseId: "phase-1",
+        scope: { readSet: [], writeSet: [] },
+        inputContractIds: [],
+        outputContractIds: [],
+        verifierDescription: "All tests pass",
+        dependsOn: ["phase-1-planner"],
+        status: "pending",
+      },
+    ],
+  });
+}
+
+function phase2PlannerOutput(): string {
+  return JSON.stringify({
+    addedNodes: [
+      {
+        id: "phase-2-task-1",
+        title: "Phase 2 Task",
+        description: "First task in Phase 2",
+        kind: "raw",
+        phaseId: "phase-2",
+        scope: { readSet: [], writeSet: [] },
+        inputContractIds: [],
+        outputContractIds: [],
+        verifierDescription: "All tests pass",
+        dependsOn: ["phase-2-planner"],
+        status: "pending",
+      },
+    ],
+  });
 }
 
 // ── Stub PlannerDriver ────────────────────────────────────────────────────────
@@ -148,8 +185,6 @@ function makeStubPlannerDriver(outputs: ReadonlyArray<string | Error>): Layer.La
     PlannerDriver,
     PlannerDriver.of({
       compile: (_input) => {
-        // _input now includes weaveRunId, projectId, parentThreadTitle,
-        // projectWorkspaceRoot, vision, snapshotContent, previousError
         const idx = callIndex++;
         const output = outputs[idx];
         if (output === undefined) {
@@ -186,14 +221,12 @@ function makeStubProcessRunner(result: ProcessRunnerResult) {
 
 function makeStubGitCore() {
   const worktreeCalls: string[] = [];
-
   const stubShape: GitCoreShape = {
     createWorktree: (input) => {
       const branch = input.newBranch ?? input.branch;
       worktreeCalls.push(branch);
-      const fakePath = `/tmp/weave-test-${branch}`;
       return Effect.succeed({
-        worktree: { path: fakePath, branch },
+        worktree: { path: `/tmp/weave-test-${branch}`, branch },
       });
     },
     execute: () => Effect.die(new Error("stub: execute not implemented")),
@@ -222,7 +255,6 @@ function makeStubGitCore() {
     initRepo: () => Effect.die(new Error("stub: initRepo not implemented")),
     listLocalBranchNames: () => Effect.die(new Error("stub: listLocalBranchNames not implemented")),
   };
-
   return {
     layer: Layer.succeed(GitCore, GitCore.of(stubShape)),
     worktreeCalls,
@@ -232,7 +264,7 @@ function makeStubGitCore() {
 // ── System factory ────────────────────────────────────────────────────────────
 
 async function createE2ESystem(testPrefix: string) {
-  const { rawJson } = makeThreeNodeBlueprint();
+  const { rawJson } = makeMetaBlueprintJson();
   const stubPlannerDriverLayer = makeStubPlannerDriver([rawJson]);
   const stubProcessRunner = makeStubProcessRunner({
     exitCode: 0,
@@ -256,7 +288,6 @@ async function createE2ESystem(testPrefix: string) {
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
-
   const weaveEngineLayer = WeaveEngineLive.pipe(Layer.provide(orchestrationLayer));
   const receiptBusLayer = RuntimeReceiptBusLive;
 
@@ -288,7 +319,6 @@ async function createE2ESystem(testPrefix: string) {
   );
 
   const runtime = ManagedRuntime.make(appLayer);
-
   const services = await runtime.runPromise(
     Effect.gen(function* () {
       return {
@@ -297,7 +327,6 @@ async function createE2ESystem(testPrefix: string) {
         planner: yield* WeavePlanner,
         weaveEngine: yield* WeaveEngineService,
         orchestrationEngine: yield* OrchestrationEngineService,
-        receiptBus: yield* RuntimeReceiptBus,
       };
     }),
   );
@@ -311,40 +340,159 @@ async function createE2ESystem(testPrefix: string) {
   };
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Smart turn driver ────────────────────────────────────────────────────────
 
-describe("Weave Run end-to-end", () => {
-  // Skipped in Slice 2 of incremental planning:
-  // 1) Pre-existing breakage from commit 040f979f: WeaveContractConformer's
-  //    verifier command was changed from "bun run test" to "npm run test", but
-  //    this test's stub harness still emits the old turn.processing.quiesced
-  //    signal, so verification never completes.
-  // 2) Slice 2 changed the meta-plan blueprint shape: nodes now have kind
-  //    "planning", which the scheduler/conformer cannot dispatch yet. The
-  //    end-to-end "create → complete" path will work again once Slice 3 lands
-  //    (phase planner + extend flow + conformer kind="planning" recognition)
-  //    and the scheduler can auto-dispatch Planning Nodes.
-  //
-  // TODO(slice-3): re-enable this test, update the 3-node fixture to a meta-plan,
-  // and fix the conformer-signal regression at the same time.
-  it.skip("completes a 3-node sequential run from create to complete", async () => {
+/**
+ * For each thread.turn-start-requested:
+ *  - Look up the owning Weave node from the projection.
+ *  - If the node is `kind: "planning"`, find its planner output in the map
+ *    and append an assistant message with that JSON.
+ *  - Then dispatch `thread.session.set { status: "ready", activeTurnId: null }`
+ *    — the conformer's trigger event.
+ *
+ * The `plannerOutputs` map keys by node id; the value is the JSON string the
+ * Phase Planner agent would emit. For a Task node the key is omitted (no
+ * injection needed).
+ */
+function startSmartTurnDriver(
+  system: Awaited<ReturnType<typeof createE2ESystem>>,
+  plannerOutputs: ReadonlyMap<string, string>,
+  weaveRunId: WeaveRunId,
+) {
+  return Effect.forkScoped(
+    Stream.runForEach(
+      system.orchestrationEngine.streamDomainEvents.pipe(
+        Stream.filter(
+          (e): e is Extract<typeof e, { type: "thread.turn-start-requested" }> =>
+            e.type === "thread.turn-start-requested",
+        ),
+      ),
+      (event) =>
+        Effect.gen(function* () {
+          const threadId = event.payload.threadId;
+          // Reverse-lookup: find the owning Weave node by walking childThreads.
+          const projection = yield* system.weaveEngine.getWeaveRun(weaveRunId);
+          if (projection === null) return;
+          const ownerNodeId = findOwningNode(projection, threadId);
+          if (ownerNodeId === null) return;
+
+          const plannerJson = plannerOutputs.get(ownerNodeId);
+          if (plannerJson !== undefined) {
+            yield* system.orchestrationEngine.appendSystemEvent({
+              eventId: EventId.make(crypto.randomUUID()),
+              aggregateKind: "thread",
+              aggregateId: threadId,
+              type: "thread.message-sent",
+              occurredAt: now(),
+              commandId: null,
+              causationEventId: null,
+              correlationId: null,
+              metadata: {},
+              payload: {
+                threadId,
+                messageId: MessageId.make(`msg-${crypto.randomUUID()}`),
+                role: "assistant",
+                text: plannerJson,
+                turnId: null,
+                streaming: false,
+                createdAt: now(),
+                updatedAt: now(),
+              },
+            });
+          }
+
+          // Dispatch session.set with status "ready" — the conformer's
+          // trigger event.
+          yield* system.orchestrationEngine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make(`cmd-session-set-${crypto.randomUUID()}`),
+            threadId,
+            session: {
+              threadId,
+              status: "ready",
+              providerName: "stub",
+              runtimeMode: "full-access",
+              activeTurnId: null,
+              lastError: null,
+              updatedAt: now(),
+            },
+            createdAt: now(),
+          });
+        }),
+    ),
+  );
+}
+
+function findOwningNode(projection: WeaveRunProjection, threadId: ThreadId): string | null {
+  for (const [nodeId, entry] of projection.childThreads) {
+    if (entry.threadId === threadId) return nodeId as string;
+  }
+  return null;
+}
+
+// ── Approval driver ──────────────────────────────────────────────────────────
+
+/**
+ * Polls for run.status === "reviewing"; when found, dispatches
+ * weave.blueprint.approve at the current Blueprint version. Stops when the
+ * run is terminal (complete / failed / aborted).
+ */
+function startApprovalDriver(
+  system: Awaited<ReturnType<typeof createE2ESystem>>,
+  weaveRunId: WeaveRunId,
+  approvedVersions: { current: Set<number> },
+) {
+  return Effect.forkScoped(
+    Effect.gen(function* () {
+      while (true) {
+        yield* Effect.sleep("30 millis");
+        const projection = yield* system.weaveEngine.getWeaveRun(weaveRunId);
+        if (projection === null) continue;
+        const status = projection.run.status;
+        if (status === "complete" || status === "aborted") return;
+        if (status !== "reviewing") continue;
+        const version = projection.currentBlueprint?.version;
+        if (version === undefined) continue;
+        if (approvedVersions.current.has(version as number)) continue;
+        approvedVersions.current.add(version as number);
+        yield* system.weaveEngine.dispatchWeaveCommand({
+          type: "weave.blueprint.approve",
+          commandId: CommandId.make(`cmd-approve-${version}-${crypto.randomUUID()}`),
+          weaveRunId,
+          blueprintVersion: version,
+          concurrencyCap: 1,
+          createdAt: now(),
+        });
+      }
+    }),
+  );
+}
+
+// ── Test ─────────────────────────────────────────────────────────────────────
+
+describe("Weave Run end-to-end (incremental planning)", () => {
+  it("completes a 2-Phase meta-plan run from create to complete", async () => {
     const projectId = "project-e2e-1";
     const runId = WeaveRunId.make("run-e2e-1");
 
-    const system = await createE2ESystem("t3-weave-e2e-1-");
+    const system = await createE2ESystem("t3-weave-e2e-incremental-1-");
 
-    // Run everything inside a single scoped block so the quiesce driver fiber
-    // stays alive for the full duration of the test (including polling).
+    const plannerOutputs = new Map<string, string>([
+      ["phase-1-planner", phase1PlannerOutput()],
+      ["phase-2-planner", phase2PlannerOutput()],
+    ]);
+    const approvedVersions = { current: new Set<number>() };
+
     const projection = await system.run(
       Effect.scoped(
         Effect.gen(function* () {
-          // ── 1. Start all reactors ───────────────────────────────────────
+          // Start all reactors.
           yield* system.planner.start();
           yield* system.scheduler.start();
           yield* system.conformer.start();
-          yield* Effect.sleep("30 millis"); // allow subscribers to attach
+          yield* Effect.sleep("30 millis"); // let subscribers attach
 
-          // ── 2. Seed a project (required by thread.create invariant) ─────
+          // Seed project.
           yield* system.orchestrationEngine.dispatch({
             type: "project.create",
             commandId: CommandId.make(`cmd-project-${projectId}`),
@@ -355,81 +503,36 @@ describe("Weave Run end-to-end", () => {
             createdAt: now(),
           });
 
-          // ── 3. Install the quiesce driver ──────────────────────────────
-          //
-          // Subscribes to streamDomainEvents. For each thread.turn-start-requested
-          // event, publishes a turn.processing.quiesced receipt. This simulates
-          // what CheckpointReactor does after a real provider turn completes,
-          // without needing ProviderService at all.
-          //
-          // forkScoped: the driver lives for the full scope (= until the run
-          // reaches "complete" and we exit the scoped block).
-          const receiptBus = system.receiptBus;
-          const orchestrationEngine = system.orchestrationEngine;
+          // Start the smart turn driver and approval driver.
+          yield* startSmartTurnDriver(system, plannerOutputs, runId);
+          yield* startApprovalDriver(system, runId, approvedVersions);
 
-          yield* Effect.forkScoped(
-            Stream.runForEach(
-              orchestrationEngine.streamDomainEvents.pipe(
-                Stream.filter(
-                  (e): e is Extract<typeof e, { type: "thread.turn-start-requested" }> =>
-                    e.type === "thread.turn-start-requested",
-                ),
-              ),
-              (event) =>
-                receiptBus.publish({
-                  type: "turn.processing.quiesced",
-                  threadId: event.payload.threadId,
-                  turnId: TurnId.make(`turn-quiesce-${crypto.randomUUID()}`),
-                  checkpointTurnCount: 1 as never,
-                  createdAt: now(),
-                }),
-            ),
-          );
-
-          // ── 4. Create the Weave Run ────────────────────────────────────
-          // Planner is listening — it will call the stub driver and emit
-          // weave.blueprint-compiled, transitioning the run to "reviewing".
+          // Create the Weave Run. Planner reactor calls the stub driver and
+          // emits weave.blueprint-compiled (v1, initial) → run goes to
+          // "reviewing". Approval driver picks it up and approves v1 → run
+          // goes to "running". Scheduler dispatches Phase 1's Planning Node.
+          // Smart turn driver injects Phase 1's planner output and dispatches
+          // session.ready. Conformer reads JSON, dispatches
+          // weave.blueprint.extend. Decider emits node-verified + extended +
+          // compiled (v2, phase-planning) → reviewing. Approval driver
+          // approves v2 → running. Scheduler dispatches Phase 1 Task. Smart
+          // turn driver dispatches session.ready (no JSON injection — Task).
+          // Conformer runs verifier (stub exit 0) → node-verified. Phase 1
+          // complete → scheduler dispatches Phase 2's Planning Node. … and so
+          // on until run "complete".
           yield* system.weaveEngine.dispatchWeaveCommand({
             type: "weave.create",
             commandId: CommandId.make("cmd-e2e-create"),
             weaveRunId: runId,
             projectId: ProjectId.make(projectId),
-            title: "3-Node E2E Weave",
-            vision: "Build scaffold → contract → raw",
+            title: "Incremental Planning E2E",
+            vision: "Build something across two phases",
             createdAt: now(),
           });
 
-          // ── 5. Wait for planner to emit blueprint-compiled ────────────
-          yield* system.planner.drain;
-
-          // ── 6. Approve the blueprint ──────────────────────────────────
-          // Transitions run to "running". Scheduler picks up weave.blueprint-approved
-          // and dispatches the first ready node (scaffold, no deps).
-          yield* system.weaveEngine.dispatchWeaveCommand({
-            type: "weave.blueprint.approve",
-            commandId: CommandId.make("cmd-e2e-approve"),
-            weaveRunId: runId,
-            blueprintVersion: BlueprintVersion.make(1),
-            concurrencyCap: 1,
-            createdAt: now(),
-          });
-
-          // ── 7. Poll until "complete" ───────────────────────────────────
-          //
-          // Event chain (automatic after approve):
-          //   blueprint-approved → scheduler dispatches scaffold
-          //   turn-start-requested (scaffold) → quiesce driver → receipt
-          //   receipt → conformer → bun test exit 0 → weave.node.verified (scaffold)
-          //   weave.node-verified → scheduler dispatches contract (depends scaffold)
-          //   turn-start-requested (contract) → quiesce → receipt → conformer
-          //   → weave.node.verified (contract)
-          //   weave.node-verified → scheduler dispatches raw (depends contract)
-          //   turn-start-requested (raw) → quiesce → receipt → conformer
-          //   → weave.node.verified (raw)
-          //   weave.node-verified (last node, last phase) → decider → weave.exited
-          //   → run.status = "complete"
+          // Poll for "complete".
           const deadline = Date.now() + 30_000;
-          let delay = 20;
+          let delay = 30;
           while (Date.now() < deadline) {
             const p = yield* system.weaveEngine.getWeaveRun(runId);
             if (p?.run.status === "complete") break;
@@ -442,26 +545,28 @@ describe("Weave Run end-to-end", () => {
       ),
     );
 
-    // ── 8. Assertions ──────────────────────────────────────────────────
     expect(projection).not.toBeNull();
-
-    // Run must be "complete"
     expect(projection?.run.status).toBe("complete");
 
-    // All 3 nodes must be "verified"
-    expect(projection?.nodeMeta.get(WeaveNodeId.make("scaffold"))?.status).toBe("verified");
-    expect(projection?.nodeMeta.get(WeaveNodeId.make("contract"))?.status).toBe("verified");
-    expect(projection?.nodeMeta.get(WeaveNodeId.make("raw"))?.status).toBe("verified");
+    // All four nodes are verified.
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("phase-1-planner"))?.status).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("phase-1-task-1"))?.status).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("phase-2-planner"))?.status).toBe("verified");
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("phase-2-task-1"))?.status).toBe("verified");
 
-    // Scheduler must have allocated 3 worktrees (one per node)
-    expect(system.stubGit.worktreeCalls).toHaveLength(3);
+    // Worktrees: 4 (one per node).
+    expect(system.stubGit.worktreeCalls).toHaveLength(4);
 
-    // Conformer must have invoked bun run test exactly 3 times
-    expect(system.stubProcessRunner.getRunCount()).toBe(3);
+    // Verifier: ran twice (once per Task; not for Planning Nodes).
+    expect(system.stubProcessRunner.getRunCount()).toBe(2);
 
-    // All 3 child threads must be recorded in the projection
-    expect(projection?.childThreads.size).toBe(3);
+    // Approval driver fired 3 times: v1 (initial), v2 (Phase 1 emission),
+    // v3 (Phase 2 emission).
+    expect(approvedVersions.current).toEqual(new Set([1, 2, 3]));
+
+    // Child threads: 4 (one per node).
+    expect(projection?.childThreads.size).toBe(4);
 
     await system.dispose();
-  }, 60_000); // generous timeout — default vitest 5s is too tight for the whole chain
+  }, 60_000);
 });
