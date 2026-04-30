@@ -1,5 +1,6 @@
 import {
   Blueprint,
+  type BlueprintSource,
   BlueprintVersion,
   CommandId,
   EventId,
@@ -38,6 +39,64 @@ function weaveEvent<T extends WeaveOrchestrationEvent["type"]>(
     payload,
     ...overrides,
   } as Extract<WeaveOrchestrationEvent, { type: T }>;
+}
+
+/**
+ * Build a minimal Blueprint for projector tests.
+ *
+ * Defaults:
+ *  - `version`: required (callers always specify it).
+ *  - `compiledBy`: "planner" if not provided.
+ *  - Each node: `description` "", empty `scope`/contracts, empty
+ *    `verifierDescription`, status "pending".
+ *  - One phase ("p1", ordinal 0) if `phases` is omitted.
+ *
+ * Decode is via `Schema.decodeSync(Blueprint)` so the result is the same
+ * branded-typed shape the production code returns.
+ */
+type NodeOpts = {
+  id: string;
+  kind?: "raw" | "scaffold" | "contract" | "utility" | "planning";
+  phaseId?: string;
+  dependsOn?: ReadonlyArray<string>;
+  title?: string;
+};
+type PhaseOpts = { id: string; ordinal: number; title?: string };
+
+function makeMinimalBlueprint(opts: {
+  version: number;
+  nodes: ReadonlyArray<NodeOpts>;
+  phases?: ReadonlyArray<PhaseOpts>;
+  compiledBy?: BlueprintSource;
+}): Blueprint {
+  const phases = opts.phases ?? [{ id: "p1", ordinal: 0 }];
+  return Schema.decodeSync(Blueprint)({
+    version: BlueprintVersion.make(opts.version),
+    nodes: opts.nodes.map((n) => ({
+      id: WeaveNodeId.make(n.id),
+      title: n.title ?? n.id,
+      description: "",
+      kind: n.kind ?? "raw",
+      phaseId: WeavePhaseId.make(n.phaseId ?? phases[0]!.id),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: (n.dependsOn ?? []).map((d) => WeaveNodeId.make(d)),
+      status: "pending",
+    })),
+    phases: phases.map((p) => ({
+      id: WeavePhaseId.make(p.id),
+      ordinal: p.ordinal,
+      title: p.title ?? p.id,
+      description: "",
+      approval: "pending",
+    })),
+    contracts: [],
+    decisions: [],
+    compiledAt: now,
+    compiledBy: opts.compiledBy ?? "planner",
+  });
 }
 
 describe("projectWeaveEvent — weave.created", () => {
@@ -623,36 +682,9 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
       vision: "",
       occurredAt: now,
     });
-    const v1 = Schema.decodeSync(Blueprint)({
-      version: BlueprintVersion.make(1),
-      nodes: [
-        {
-          id: WeaveNodeId.make("n1"),
-          title: "N1",
-          description: "",
-          kind: "planning",
-          phaseId: WeavePhaseId.make("p1"),
-          scope: { readSet: [], writeSet: [] },
-          inputContractIds: [],
-          outputContractIds: [],
-          verifierDescription: "",
-          dependsOn: [],
-          status: "pending",
-        },
-      ],
-      phases: [
-        {
-          id: WeavePhaseId.make("p1"),
-          ordinal: 0,
-          title: "P1",
-          description: "",
-          approval: "pending",
-        },
-      ],
-      contracts: [],
-      decisions: [],
-      compiledAt: now,
-      compiledBy: "planner",
+    const v1 = makeMinimalBlueprint({
+      version: 1,
+      nodes: [{ id: "n1", kind: "planning" }],
     });
     const compileV1 = weaveEvent("weave.blueprint-compiled", {
       weaveRunId: WeaveRunId.make("run-preserve-1"),
@@ -676,29 +708,13 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
 
     // Now apply blueprint-compiled v2 with phase-planning reason (n1 still
     // present, plus a fresh task n2 added).
-    const v2 = Schema.decodeSync(Blueprint)({
-      version: BlueprintVersion.make(2),
-      nodes: [
-        ...v1.nodes,
-        {
-          id: WeaveNodeId.make("n2"),
-          title: "N2",
-          description: "",
-          kind: "raw",
-          phaseId: WeavePhaseId.make("p1"),
-          scope: { readSet: [], writeSet: [] },
-          inputContractIds: [],
-          outputContractIds: [],
-          verifierDescription: "",
-          dependsOn: [WeaveNodeId.make("n1")],
-          status: "pending",
-        },
-      ],
-      phases: v1.phases,
-      contracts: [],
-      decisions: [],
-      compiledAt: now,
+    const v2 = makeMinimalBlueprint({
+      version: 2,
       compiledBy: "phase-planning",
+      nodes: [
+        { id: "n1", kind: "planning" },
+        { id: "n2", kind: "raw", dependsOn: ["n1"] },
+      ],
     });
     const compileV2 = weaveEvent("weave.blueprint-compiled", {
       weaveRunId: WeaveRunId.make("run-preserve-1"),
@@ -723,49 +739,12 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
       vision: "",
       occurredAt: now,
     });
-    const v1 = Schema.decodeSync(Blueprint)({
-      version: BlueprintVersion.make(1),
+    const v1 = makeMinimalBlueprint({
+      version: 1,
       nodes: [
-        {
-          id: WeaveNodeId.make("a"),
-          title: "A",
-          description: "",
-          kind: "raw",
-          phaseId: WeavePhaseId.make("p1"),
-          scope: { readSet: [], writeSet: [] },
-          inputContractIds: [],
-          outputContractIds: [],
-          verifierDescription: "",
-          dependsOn: [],
-          status: "pending",
-        },
-        {
-          id: WeaveNodeId.make("b"),
-          title: "B",
-          description: "",
-          kind: "raw",
-          phaseId: WeavePhaseId.make("p1"),
-          scope: { readSet: [], writeSet: [] },
-          inputContractIds: [],
-          outputContractIds: [],
-          verifierDescription: "",
-          dependsOn: [],
-          status: "pending",
-        },
+        { id: "a", kind: "raw" },
+        { id: "b", kind: "raw" },
       ],
-      phases: [
-        {
-          id: WeavePhaseId.make("p1"),
-          ordinal: 0,
-          title: "P1",
-          description: "",
-          approval: "pending",
-        },
-      ],
-      contracts: [],
-      decisions: [],
-      compiledAt: now,
-      compiledBy: "planner",
     });
     const compileV1 = weaveEvent("weave.blueprint-compiled", {
       weaveRunId: WeaveRunId.make("run-preserve-2"),
