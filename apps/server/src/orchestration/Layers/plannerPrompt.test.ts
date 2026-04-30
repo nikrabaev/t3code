@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlannerPrompt } from "./plannerPrompt.ts";
+import { buildPhasePlannerPrompt, buildPlannerPrompt } from "./plannerPrompt.ts";
 
 describe("buildPlannerPrompt", () => {
   it("without previousError does NOT contain the PREVIOUS ATTEMPT FAILED section", () => {
@@ -68,5 +68,62 @@ describe("buildPlannerPrompt", () => {
     expect(prompt).not.toContain("verifierCommand");
     expect(prompt).not.toContain("bun run test");
     expect(prompt).not.toContain("npm test");
+  });
+});
+
+describe("buildPhasePlannerPrompt", () => {
+  const baseInput = {
+    vision: "Build a TODO app",
+    snapshotContent: "",
+    phaseTitle: "Phase 1: Scaffolding",
+    phaseDescription: "Stand up the Next.js app skeleton",
+    plannerNodeDescription: "Plan the Next.js scaffold sub-tasks",
+    plannerPhaseId: "phase-1",
+  };
+
+  it("instructs JSON-only output", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toContain("Return a single JSON object");
+    expect(prompt).toContain("JSON only, no prose");
+  });
+
+  it("constrains the output shape to PhasePlannerOutput", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toContain('"addedNodes"');
+  });
+
+  it("requires every added node to have phaseId equal to the planner's phase", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toContain("phase-1");
+    expect(prompt).toMatch(/phaseId.*must equal/i);
+  });
+
+  it("requires every added node to have status='pending'", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toMatch(/status.*"pending"/);
+  });
+
+  it("forbids kind='planning' (no recursion in Slice 3)", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toMatch(/kind.*MUST NOT.*planning/i);
+  });
+
+  it("includes the user vision and phase context", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toContain("Build a TODO app");
+    expect(prompt).toContain("Phase 1: Scaffolding");
+    expect(prompt).toContain("Stand up the Next.js app skeleton");
+    expect(prompt).toContain("Plan the Next.js scaffold sub-tasks");
+  });
+
+  it("renders an empty snapshot as '(empty)'", () => {
+    const prompt = buildPhasePlannerPrompt(baseInput);
+    expect(prompt).toContain("(empty)");
+  });
+
+  it("appends a previousError section when provided", () => {
+    const prompt = buildPhasePlannerPrompt({ ...baseInput, previousError: "JSON parse failed" });
+    expect(prompt).toContain("PREVIOUS ATTEMPT FAILED WITH:");
+    expect(prompt).toContain("JSON parse failed");
   });
 });

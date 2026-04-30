@@ -101,3 +101,90 @@ export function buildPlannerPrompt(input: {
 
   return parts.join("\n");
 }
+
+/**
+ * Build the structured prompt the Phase Planner sends to the LLM.
+ *
+ * Slice 3 of incremental planning: emits a `PhasePlannerOutput` JSON object —
+ * a list of nodes (Tasks) to append under the planner's Phase. The conformer
+ * (post-Slice-3 wiring) parses and validates this output, then dispatches
+ * `weave.blueprint.extend`.
+ *
+ * Constraints (enforced both in the prompt and in the decider):
+ * - Output JSON only.
+ * - Every node has `phaseId === plannerPhaseId`.
+ * - Every node has `status: "pending"`.
+ * - No node has `kind: "planning"` (Slice 3 forbids recursion).
+ */
+export function buildPhasePlannerPrompt(input: {
+  vision: string;
+  snapshotContent: string;
+  phaseTitle: string;
+  phaseDescription: string;
+  plannerNodeDescription: string;
+  plannerPhaseId: string;
+  previousError?: string;
+}): string {
+  const parts: string[] = [
+    "You are the Weave Phase Planner. Emit the sub-DAG of Tasks for one Phase.",
+    "",
+    "OUTPUT REQUIREMENTS:",
+    "- Return a single JSON object. JSON only, no prose, no markdown fences, no commentary.",
+    "- The output must be valid JSON parseable by JSON.parse().",
+    "- Do not include any text before or after the JSON object.",
+    "",
+    "OUTPUT SCHEMA (PhasePlannerOutput):",
+    "{",
+    '  "addedNodes": [',
+    "    {",
+    '      "id": "<WeaveNodeId — non-empty string, must be unique within the run>",',
+    '      "title": "<non-empty string — names the Task>",',
+    '      "description": "<string — what the Task does>",',
+    '      "kind": "<\\"raw\\" | \\"scaffold\\" | \\"contract\\" | \\"utility\\"> — see RULES",',
+    `      "phaseId": "${input.plannerPhaseId}",`,
+    '      "scope": { "readSet": [], "writeSet": [] },',
+    '      "inputContractIds": [],',
+    '      "outputContractIds": [],',
+    '      "verifierDescription": "<string — describe how this Task is verified>",',
+    '      "dependsOn": ["<existing node id or another addedNode id>", "..."],',
+    '      "status": "pending"',
+    "    }",
+    "  ]",
+    "}",
+    "",
+    "RULES:",
+    `- Every node's \`phaseId\` MUST equal "${input.plannerPhaseId}". Different phaseIds will be rejected.`,
+    '- Every node MUST have `"status": "pending"`. Other statuses will be rejected.',
+    '- A node\'s `kind` MUST NOT be `"planning"`. Slice 3 forbids mid-Phase Planning Nodes; emit only `raw`/`scaffold`/`contract`/`utility` Tasks.',
+    "- Node ids must be unique within addedNodes and must not collide with any existing node id in the run.",
+    "- `dependsOn` may reference existing node ids (in earlier Phases or this Phase) or other ids in this addedNodes list. Do NOT reference your own planner node — your verification fires automatically once this output is accepted.",
+    "- An empty `addedNodes` array is allowed and means this Phase concludes as a no-op.",
+    "",
+    "USER VISION:",
+    input.vision,
+    "",
+    "PHASE TITLE:",
+    input.phaseTitle,
+    "",
+    "PHASE DESCRIPTION:",
+    input.phaseDescription,
+    "",
+    "PLANNER NODE DESCRIPTION:",
+    input.plannerNodeDescription,
+    "",
+    "CODEBASE SNAPSHOT:",
+    input.snapshotContent || "(empty)",
+  ];
+
+  if (input.previousError) {
+    parts.push(
+      "",
+      "PREVIOUS ATTEMPT FAILED WITH:",
+      input.previousError,
+      "",
+      "Fix the issue described above and emit valid JSON.",
+    );
+  }
+
+  return parts.join("\n");
+}
