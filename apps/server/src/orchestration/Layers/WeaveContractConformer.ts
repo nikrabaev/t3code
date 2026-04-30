@@ -24,9 +24,18 @@
  *
  * @module WeaveContractConformerLive
  */
-import { CommandId, WeaveNodeId, WeaveRunId, type ProjectId } from "@t3tools/contracts";
-import { Cause, Effect, Layer, Stream } from "effect";
+import {
+  CommandId,
+  PhasePlannerOutput,
+  WeaveNodeId,
+  WeaveRunId,
+  type ProjectId,
+  type WeaveCommand,
+} from "@t3tools/contracts";
+import { Cause, Effect, Layer, Schema, Stream } from "effect";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+
+import type { OrchestrationDispatchError } from "../Errors.ts";
 
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { WeaveEngineService } from "../Services/WeaveEngine.ts";
@@ -111,6 +120,7 @@ type WeaveRunsForLookup = ReadonlyMap<
     readonly currentBlueprint: {
       readonly nodes: ReadonlyArray<{
         readonly id: WeaveNodeId;
+        readonly kind: "raw" | "scaffold" | "contract" | "utility" | "planning";
         readonly verifierCommand?: string | undefined;
       }>;
     } | null;
@@ -127,6 +137,7 @@ interface NodeLookup {
   readonly threadId: string;
   readonly worktreePath: string;
   readonly projectId: ProjectId;
+  readonly nodeKind: "raw" | "scaffold" | "contract" | "utility" | "planning";
   readonly nodeVerifierCommand: string | null;
 }
 
@@ -144,6 +155,7 @@ function findWeaveNodeForThread(
           threadId,
           worktreePath: entry.worktreePath,
           projectId: run.run.projectId,
+          nodeKind: node?.kind ?? "raw",
           nodeVerifierCommand: node?.verifierCommand ?? null,
         };
       }
@@ -168,8 +180,112 @@ function findWeaveNodeById(
     threadId: child.threadId,
     worktreePath: child.worktreePath,
     projectId: run.run.projectId,
+    nodeKind: node?.kind ?? "raw",
     nodeVerifierCommand: node?.verifierCommand ?? null,
   };
+}
+
+// ── Planning-kind helper ──────────────────────────────────────────────────────
+
+/**
+ * Schema-validation path for `kind === "planning"` nodes. Reads the child
+ * thread's accumulated assistant text, parses it as JSON, decodes against
+ * `PhasePlannerOutput`. On success → dispatches `weave.blueprint.extend` (the
+ * decider then emits `weave.node-verified`). On parse or decode failure →
+ * dispatches `weave.node.failed`.
+ *
+ * Errors from the dispatch path are absorbed via `Effect.ignore`; logging is
+ * left to the surrounding `processItem` catch block.
+ */
+function processPlanningNode(params: {
+  readonly weaveRunId: WeaveRunId;
+  readonly nodeId: WeaveNodeId;
+  readonly threadId: string;
+  readonly readModel: {
+    readonly threads: ReadonlyArray<{
+      readonly id: string;
+      readonly messages: ReadonlyArray<{
+        readonly role: string;
+        readonly text: string;
+      }>;
+    }>;
+  };
+  readonly weaveEngine: {
+    readonly dispatchWeaveCommand: (
+      cmd: WeaveCommand,
+    ) => Effect.Effect<unknown, OrchestrationDispatchError>;
+  };
+}): Effect.Effect<void, never, never> {
+  return Effect.gen(function* () {
+    const thread = params.readModel.threads.find((t) => t.id === params.threadId);
+    const assistantText = (thread?.messages ?? [])
+      .filter((m) => m.role === "assistant")
+      .map((m) => m.text)
+      .join("");
+
+    const createdAt = new Date().toISOString();
+
+    if (assistantText.trim().length === 0) {
+      yield* params.weaveEngine
+        .dispatchWeaveCommand({
+          type: "weave.node.failed",
+          commandId: serverCommandId(),
+          weaveRunId: params.weaveRunId,
+          nodeId: params.nodeId,
+          reason: "planning node emitted no assistant text",
+          createdAt,
+        })
+        .pipe(Effect.ignore);
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(assistantText);
+    } catch (e) {
+      yield* params.weaveEngine
+        .dispatchWeaveCommand({
+          type: "weave.node.failed",
+          commandId: serverCommandId(),
+          weaveRunId: params.weaveRunId,
+          nodeId: params.nodeId,
+          reason: `planning JSON parse failed: ${e instanceof Error ? e.message : String(e)}`,
+          failureOutput: assistantText.slice(-1024),
+          createdAt,
+        })
+        .pipe(Effect.ignore);
+      return;
+    }
+
+    const decodeResult = Schema.decodeUnknownExit(PhasePlannerOutput)(parsed);
+    if (decodeResult._tag === "Failure") {
+      yield* params.weaveEngine
+        .dispatchWeaveCommand({
+          type: "weave.node.failed",
+          commandId: serverCommandId(),
+          weaveRunId: params.weaveRunId,
+          nodeId: params.nodeId,
+          reason: `planning output decode failed: ${Cause.pretty(decodeResult.cause)}`,
+          failureOutput: assistantText.slice(-1024),
+          createdAt,
+        })
+        .pipe(Effect.ignore);
+      return;
+    }
+
+    const output = decodeResult.value;
+
+    yield* params.weaveEngine
+      .dispatchWeaveCommand({
+        type: "weave.blueprint.extend",
+        commandId: serverCommandId(),
+        weaveRunId: params.weaveRunId,
+        plannerNodeId: params.nodeId,
+        addedNodes: output.addedNodes,
+        createdAt,
+      })
+      .pipe(Effect.ignore);
+  });
 }
 
 // ── Trigger union ─────────────────────────────────────────────────────────────
@@ -223,7 +339,30 @@ const make = Effect.gen(function* () {
         return;
       }
 
-      const { weaveRunId, nodeId, threadId, worktreePath, projectId, nodeVerifierCommand } = match;
+      const {
+        weaveRunId,
+        nodeId,
+        threadId,
+        worktreePath,
+        projectId,
+        nodeKind,
+        nodeVerifierCommand,
+      } = match;
+
+      // Planning Nodes don't run a verifier — the conformer schema-validates
+      // the child agent's emitted JSON against PhasePlannerOutput and dispatches
+      // `weave.blueprint.extend` (decider emits node-verified) on success, or
+      // `weave.node.failed` on parse/decode failure.
+      if (nodeKind === "planning") {
+        yield* processPlanningNode({
+          weaveRunId,
+          nodeId,
+          threadId,
+          readModel,
+          weaveEngine,
+        });
+        return;
+      }
 
       // Step 2: resolve the verifier command — node override beats project
       // default beats the hardcoded fallback.

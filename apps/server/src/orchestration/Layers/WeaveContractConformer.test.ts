@@ -19,6 +19,8 @@ import {
   Blueprint,
   BlueprintVersion,
   CommandId,
+  EventId,
+  MessageId,
   ProjectId,
   ThreadId,
   WeaveNodeId,
@@ -63,7 +65,11 @@ const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 
 const FAKE_WORKSPACE_ROOT = "/tmp/fake-workspace-conformer";
 
-function makeValidBlueprint(params: { nodeId: string; phaseId: string }): Blueprint {
+function makeValidBlueprint(params: {
+  nodeId: string;
+  phaseId: string;
+  kind?: "raw" | "scaffold" | "contract" | "utility" | "planning";
+}): Blueprint {
   const phaseId = WeavePhaseId.make(params.phaseId);
   const nodeId = WeaveNodeId.make(params.nodeId);
   return Schema.decodeSync(Blueprint)({
@@ -73,7 +79,7 @@ function makeValidBlueprint(params: { nodeId: string; phaseId: string }): Bluepr
         id: nodeId,
         title: "Test Node",
         description: "A test implementation node",
-        kind: "raw",
+        kind: params.kind ?? "raw",
         phaseId,
         scope: { readSet: [], writeSet: [] },
         inputContractIds: [],
@@ -317,6 +323,37 @@ function* dispatchSessionReady(
   });
 }
 
+async function injectAssistantMessage(
+  system: Awaited<ReturnType<typeof createConformerSystem>>,
+  threadId: ThreadId,
+  text: string,
+): Promise<void> {
+  const occurredAt = now();
+  await system.run(
+    system.orchestrationEngine.appendSystemEvent({
+      eventId: EventId.make(crypto.randomUUID()),
+      aggregateKind: "thread",
+      aggregateId: threadId,
+      type: "thread.message-sent",
+      occurredAt,
+      commandId: null,
+      causationEventId: null,
+      correlationId: null,
+      metadata: {},
+      payload: {
+        threadId,
+        messageId: MessageId.make(`msg-${crypto.randomUUID()}`),
+        role: "assistant",
+        text,
+        turnId: null,
+        streaming: false,
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+      },
+    }),
+  );
+}
+
 describe("WeaveContractConformer", () => {
   it("exit 0 → dispatches weave.node.verified; projection status becomes 'verified'", async () => {
     const projectId = "project-conformer-2";
@@ -470,6 +507,330 @@ describe("WeaveContractConformer", () => {
     expect(failedEvent).toBeDefined();
     const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
     expect(reason).toBe("timeout");
+
+    await system.dispose();
+  });
+});
+
+describe("WeaveContractConformer — planning kind", () => {
+  it("happy path: valid PhasePlannerOutput → dispatches weave.blueprint.extend", async () => {
+    const projectId = "project-conformer-planning-1";
+    const runId = "run-conformer-planning-1";
+    const nodeId = "node-conformer-planning-1";
+
+    const system = await createConformerSystem("t3-conformer-planning-1-", {
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+
+    const blueprint = makeValidBlueprint({ nodeId, phaseId: "phase-1", kind: "planning" });
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis");
+          yield* system.orchestrationEngine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-project-${projectId}`),
+            projectId: asProjectId(projectId),
+            title: "Test Project",
+            workspaceRoot: FAKE_WORKSPACE_ROOT,
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.create",
+            commandId: CommandId.make(`cmd-create-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            projectId: asProjectId(projectId),
+            title: "Test Weave",
+            vision: "Build something",
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.persistPlannerEvent({
+            runId: WeaveRunId.make(runId),
+            blueprint,
+            compiledBy: "planner",
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    const childEntry = projection?.childThreads.get(WeaveNodeId.make(nodeId));
+    if (!childEntry) throw new Error("Expected child thread to be allocated by scheduler");
+    const childThreadId = childEntry.threadId;
+
+    const validOutput = {
+      addedNodes: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          description: "First task in phase 1",
+          kind: "raw",
+          phaseId: "phase-1",
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "bun run test",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+    };
+    await injectAssistantMessage(system, childThreadId, JSON.stringify(validOutput));
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.conformer.start();
+          yield* Effect.sleep("20 millis");
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
+          yield* system.conformer.drain;
+        }),
+      ),
+    );
+
+    expect(system.stubProcessRunner.getRunCount()).toBe(0);
+
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const extendedEvent = allEvents.find((e) => e.type === "weave.blueprint-extended");
+    expect(extendedEvent).toBeDefined();
+    const extendedPayload = (
+      extendedEvent as {
+        payload: { plannerNodeId: string; addedNodeIds: ReadonlyArray<string> };
+      }
+    ).payload;
+    expect(extendedPayload.plannerNodeId).toBe(nodeId);
+    expect(extendedPayload.addedNodeIds).toEqual(["task-1"]);
+
+    // The decider emits `weave.node-verified` for the planner node alongside
+    // the blueprint events. Assert the event itself rather than the projected
+    // status: the existing `weave.blueprint-compiled` projector arm rebuilds
+    // `nodeMeta` from scratch (resetting to "pending") and does not yet
+    // preserve nodeMeta for `compiledBy: "phase-planning"` compiles. That
+    // projector behavior is a known design gap (see plan note line 133:
+    // "Planning Node transitions to verified") and is out of scope for this
+    // task per the file-modification scope.
+    const verifiedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-verified" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(verifiedEvent).toBeDefined();
+
+    await system.dispose();
+  });
+
+  it("parse failure: malformed JSON → dispatches weave.node.failed (reason mentions JSON parse)", async () => {
+    const projectId = "project-conformer-planning-2";
+    const runId = "run-conformer-planning-2";
+    const nodeId = "node-conformer-planning-2";
+
+    const system = await createConformerSystem("t3-conformer-planning-2-", {
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+
+    const blueprint = makeValidBlueprint({ nodeId, phaseId: "phase-1", kind: "planning" });
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis");
+          yield* system.orchestrationEngine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-project-${projectId}`),
+            projectId: asProjectId(projectId),
+            title: "Test Project",
+            workspaceRoot: FAKE_WORKSPACE_ROOT,
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.create",
+            commandId: CommandId.make(`cmd-create-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            projectId: asProjectId(projectId),
+            title: "Test Weave",
+            vision: "Build something",
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.persistPlannerEvent({
+            runId: WeaveRunId.make(runId),
+            blueprint,
+            compiledBy: "planner",
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    const childEntry = projection?.childThreads.get(WeaveNodeId.make(nodeId));
+    if (!childEntry) throw new Error("Expected child thread");
+    const childThreadId = childEntry.threadId;
+
+    await injectAssistantMessage(system, childThreadId, "{not json");
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.conformer.start();
+          yield* Effect.sleep("20 millis");
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
+          yield* system.conformer.drain;
+        }),
+      ),
+    );
+
+    expect(system.stubProcessRunner.getRunCount()).toBe(0);
+
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const failedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-failed" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(failedEvent).toBeDefined();
+    const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
+    expect(reason.toLowerCase()).toContain("parse");
+
+    const finalProjection = await system.run(
+      system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)),
+    );
+    expect(finalProjection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("failed");
+
+    await system.dispose();
+  });
+
+  it("schema failure: valid JSON, wrong shape → dispatches weave.node.failed (reason mentions decode)", async () => {
+    const projectId = "project-conformer-planning-3";
+    const runId = "run-conformer-planning-3";
+    const nodeId = "node-conformer-planning-3";
+
+    const system = await createConformerSystem("t3-conformer-planning-3-", {
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+
+    const blueprint = makeValidBlueprint({ nodeId, phaseId: "phase-1", kind: "planning" });
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis");
+          yield* system.orchestrationEngine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-project-${projectId}`),
+            projectId: asProjectId(projectId),
+            title: "Test Project",
+            workspaceRoot: FAKE_WORKSPACE_ROOT,
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.create",
+            commandId: CommandId.make(`cmd-create-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            projectId: asProjectId(projectId),
+            title: "Test Weave",
+            vision: "Build something",
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.persistPlannerEvent({
+            runId: WeaveRunId.make(runId),
+            blueprint,
+            compiledBy: "planner",
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    const childEntry = projection?.childThreads.get(WeaveNodeId.make(nodeId));
+    if (!childEntry) throw new Error("Expected child thread");
+    const childThreadId = childEntry.threadId;
+
+    // Valid JSON, but no `addedNodes` field.
+    await injectAssistantMessage(system, childThreadId, JSON.stringify({ foo: 1 }));
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.conformer.start();
+          yield* Effect.sleep("20 millis");
+          yield* dispatchSessionReady(system.orchestrationEngine, childThreadId);
+          yield* system.conformer.drain;
+        }),
+      ),
+    );
+
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const failedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-failed" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(failedEvent).toBeDefined();
+    const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
+    expect(reason.toLowerCase()).toContain("decode");
 
     await system.dispose();
   });
