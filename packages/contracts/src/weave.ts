@@ -269,6 +269,14 @@ export const WeaveExitCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const WeaveDeleteCommand = Schema.Struct({
+  type: Schema.Literal("weave.delete"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  createdAt: IsoDateTime,
+});
+export type WeaveDeleteCommand = typeof WeaveDeleteCommand.Type;
+
 // Re-runs the verifier for a failed node without re-dispatching the agent.
 // The existing child thread + worktree are reused; only the verifier runs
 // again (status flips back to "running" while the verifier executes).
@@ -300,6 +308,7 @@ export const WeaveDispatchableCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveDeleteCommand,
   WeaveNodeRetryCommand,
   WeaveNodeRestartCommand,
 ]);
@@ -522,6 +531,12 @@ export const WeaveExitedPayload = Schema.Struct({
   occurredAt: IsoDateTime,
 });
 export type WeaveExitedPayload = typeof WeaveExitedPayload.Type;
+
+export const WeaveDeletedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  occurredAt: IsoDateTime,
+});
+export type WeaveDeletedPayload = typeof WeaveDeletedPayload.Type;
 
 export const WeavePlannerThreadCreatedPayload = Schema.Struct({
   weaveRunId: WeaveRunId,

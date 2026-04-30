@@ -31,6 +31,8 @@ import {
   WeaveCreatedPayload,
   WeaveDecisionResolveCommand,
   WeaveDecisionResolvedPayload,
+  WeaveDeleteCommand,
+  WeaveDeletedPayload,
   WeaveExitCommand,
   WeaveExitedPayload,
   WeaveNodeDispatchCommand,
@@ -729,6 +731,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveDeleteCommand,
   WeaveNodeRetryCommand,
   WeaveNodeRestartCommand,
 ]);
@@ -758,6 +761,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   WeavePhaseApproveCommand,
   WeaveDecisionResolveCommand,
   WeaveExitCommand,
+  WeaveDeleteCommand,
   WeaveNodeRetryCommand,
   WeaveNodeRestartCommand,
 ]);
@@ -887,6 +891,7 @@ export const OrchestrationEventType = Schema.Literals([
   "weave.decision-resolved",
   "weave.phase-approved",
   "weave.exited",
+  "weave.deleted",
   // Weave planner events (Slice 3 Task 2)
   "weave.planner.thread-created",
 ]);
@@ -1270,6 +1275,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("weave.exited"),
     payload: WeaveExitedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.deleted"),
+    payload: WeaveDeletedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
