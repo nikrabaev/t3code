@@ -573,3 +573,41 @@ describe("projectWeaveEvent — decision, phase, exit", () => {
     expect(result.run.status).toBe("aborted");
   });
 });
+
+describe("projectWeaveEvent — weave.blueprint-extended", () => {
+  it("rejects when state is null", async () => {
+    const event = weaveEvent("weave.blueprint-extended", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(2),
+      plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+      addedNodeIds: [],
+      occurredAt: now,
+    });
+    const result = await Effect.runPromiseExit(projectWeaveEvent(null, event));
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("returns state unchanged on non-null state", async () => {
+    // Build a non-null projection by running weave.created first.
+    const created = weaveEvent("weave.created", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      projectId: ProjectId.make("project-1"),
+      title: "Test Run",
+      vision: "",
+      occurredAt: now,
+    });
+    const afterCreated = await Effect.runPromise(projectWeaveEvent(null, created));
+
+    const extended = weaveEvent("weave.blueprint-extended", {
+      weaveRunId: WeaveRunId.make("run-1"),
+      version: BlueprintVersion.make(2),
+      plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+      addedNodeIds: [WeaveNodeId.make("task-1")],
+      occurredAt: now,
+    });
+    const after = await Effect.runPromise(projectWeaveEvent(afterCreated, extended));
+    // Same projection — `weave.blueprint-extended` is informational; the
+    // sister `weave.blueprint-compiled` does the real mutation.
+    expect(after).toBe(afterCreated);
+  });
+});

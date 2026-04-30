@@ -353,9 +353,11 @@ export function projectWeaveEvent(
       return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
     case "weave.blueprint-extended": {
-      // TODO(slice-2): applied by WeaveScheduler when a planning node's
-      // sub-DAG is appended to the blueprint. For Slice 1 this event is
-      // never emitted at runtime, so the projection is returned unchanged.
+      // Informational: the sister `weave.blueprint-compiled` event carries the
+      // full new Blueprint and is what mutates projection state (see
+      // weaveDecider.ts: `weave.blueprint.extend` emits both events together).
+      // We keep this arm for the audit/UI hook surface; future slices can wire
+      // event-stream consumers off of it without touching projection state.
       if (state === null) {
         return Effect.fail(
           new OrchestrationProjectorDecodeError({
