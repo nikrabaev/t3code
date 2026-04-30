@@ -41,14 +41,15 @@ function makeValidBlueprint(): Blueprint {
     nodes: [
       {
         id: nodeId,
-        title: "Test Node",
-        description: "A test implementation node",
-        kind: "raw",
+        title: "Plan Phase 1",
+        description: "Phase 1 Planning Node",
+        kind: "planning",
         phaseId,
         scope: { readSet: [], writeSet: [] },
         inputContractIds: [],
         outputContractIds: [],
-        verifierDescription: "All tests pass",
+        verifierDescription:
+          "Schema-validates the emitted Blueprint extension against the Phase Planner schema.",
         dependsOn: [],
         status: "pending",
       },
@@ -188,6 +189,8 @@ describe("WeavePlanner", () => {
     expect(projection?.run.status).toBe("reviewing");
     expect(projection?.currentBlueprint).not.toBeNull();
     expect(projection?.currentBlueprint?.nodes.length).toBe(1);
+    expect(projection?.currentBlueprint?.nodes[0]?.kind).toBe("planning");
+    expect(projection?.currentBlueprint?.phases.length).toBe(1);
 
     await system.dispose();
   });
