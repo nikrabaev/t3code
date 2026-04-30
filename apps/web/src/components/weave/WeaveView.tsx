@@ -71,6 +71,7 @@ export function WeaveView(props: WeaveViewProps) {
               environmentId={props.environmentId}
               weaveRunId={shell.id}
               blueprint={blueprint}
+              detail={detail!}
             />
             <WeaveBlueprintList detail={detail!} openNodeId={props.openNodeId} />
           </>

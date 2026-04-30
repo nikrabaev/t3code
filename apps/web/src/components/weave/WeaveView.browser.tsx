@@ -994,4 +994,117 @@ describe("WeaveView browser tests", () => {
       await mounted.cleanup();
     }
   });
+
+  // --------------------------------------------------------------------------
+  // Test N+1: post-Phase-Planner-emission gate shows Phase-aware headline
+  // --------------------------------------------------------------------------
+  it("renders a Phase-aware approve callout when blueprint.compiledBy is 'phase-planning'", async () => {
+    const snapshot = createBaseSnapshot();
+    const phaseId = PHASE_ID;
+    const plannerNodeId = "phase-1-planner" as WeaveNodeId;
+    const taskAId = "phase-1-task-a" as WeaveNodeId;
+    const taskBId = "phase-1-task-b" as WeaveNodeId;
+    const customBlueprint = {
+      version: 2 as BlueprintVersion,
+      nodes: [
+        {
+          id: plannerNodeId,
+          title: "Phase 1 Planner",
+          description: "Plan Phase 1",
+          kind: "planning" as const,
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending" as const,
+        },
+        {
+          id: taskAId,
+          title: "Task A",
+          description: "",
+          kind: "raw" as const,
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [plannerNodeId],
+          status: "pending" as const,
+        },
+        {
+          id: taskBId,
+          title: "Task B",
+          description: "",
+          kind: "raw" as const,
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [plannerNodeId],
+          status: "pending" as const,
+        },
+      ],
+      phases: [
+        {
+          id: phaseId,
+          ordinal: 0 as number & { readonly NonNegativeInt: unique symbol },
+          title: "Phase 1: Core",
+          description: "",
+          approval: "pending" as const,
+        },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: NOW_ISO,
+      compiledBy: "phase-planning" as const,
+    };
+    const projection: WeaveRunProjection = {
+      run: {
+        id: WEAVE_RUN_ID,
+        projectId: PROJECT_ID,
+        title: "test",
+        vision: "test",
+        status: "reviewing",
+        concurrencyCap: 1,
+        createdAt: NOW_ISO,
+      },
+      currentBlueprint: customBlueprint,
+      nodeMeta: new Map<WeaveNodeId, WeaveNodeMeta>([
+        // The planner node is verified (it just emitted) — its `verifiedAt`
+        // identifies which Phase the user is being asked to approve.
+        [plannerNodeId, { status: "verified", verifiedAt: NOW_ISO }],
+        [taskAId, { status: "pending" }],
+        [taskBId, { status: "pending" }],
+      ]),
+      openDecisions: new Set(),
+      autoDecisionLog: [],
+      phaseApprovals: new Map(),
+      childThreads: new Map(),
+    };
+
+    const mounted = await mountApp({
+      snapshot,
+      initialPath: `/${LOCAL_ENVIRONMENT_ID}/weave/${WEAVE_RUN_ID}`,
+      weaveRunProjection: projection,
+    });
+
+    try {
+      // Headline mentions "Phase 1: Core" (the title of the just-emitted Phase).
+      await vi.waitFor(
+        () => {
+          const callout = document.querySelector<HTMLElement>('div[class*="bg-cyan-500/5"]');
+          expect(callout, "Approve callout should render").toBeTruthy();
+          expect(callout?.textContent ?? "").toContain("Phase 1: Core");
+          // Subhead/copy includes the count of newly-added Tasks (2: Task A and Task B).
+          expect(callout?.textContent ?? "").toMatch(/2 new Tasks/i);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
 });
