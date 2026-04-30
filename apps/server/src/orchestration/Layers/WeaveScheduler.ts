@@ -43,14 +43,39 @@ type SchedulerTriggerEvent = Extract<
 >;
 
 /**
- * Compute the set of nodes that are ready to be dispatched:
- * - Node status is "pending"
- * - All declared dependencies are "verified"
+ * Compute the set of nodes that are ready to be dispatched.
+ *
+ * Kind-stratified:
+ * - **Tasks** (kind: "raw" | "scaffold" | "contract" | "utility"): ready iff
+ *   status is "pending" AND every entry in `dependsOn` is "verified".
+ * - **Planning Nodes** (kind: "planning"): ready iff status is "pending" AND
+ *   every other node in a strictly-earlier Phase (by ordinal) is "verified".
+ *   This enforces the design's "Phase N's Planning Node dispatches when Phase
+ *   N-1 is fully verified" rule without requiring the meta-planner to
+ *   declare cross-Phase dependsOn (it can't — the prior Phase's Tasks don't
+ *   exist yet at meta-plan time).
  */
 function computeReadySet(run: WeaveRunProjection): WeaveNode[] {
   if (run.currentBlueprint === null) return [];
-  return run.currentBlueprint.nodes.filter((n) => {
+  const blueprint = run.currentBlueprint;
+
+  const phaseOrdinalById = new Map<string, number>();
+  for (const phase of blueprint.phases) {
+    phaseOrdinalById.set(phase.id, phase.ordinal);
+  }
+
+  return blueprint.nodes.filter((n) => {
     if (run.nodeMeta.get(n.id)?.status !== "pending") return false;
+
+    if (n.kind === "planning") {
+      const myOrdinal = phaseOrdinalById.get(n.phaseId) ?? 0;
+      return blueprint.nodes.every((other) => {
+        const otherOrdinal = phaseOrdinalById.get(other.phaseId) ?? 0;
+        if (otherOrdinal >= myOrdinal) return true;
+        return run.nodeMeta.get(other.id)?.status === "verified";
+      });
+    }
+
     return n.dependsOn.every((dep) => run.nodeMeta.get(dep)?.status === "verified");
   });
 }

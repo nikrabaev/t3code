@@ -695,3 +695,213 @@ describe("WeaveScheduler", () => {
     await system.dispose();
   });
 });
+
+describe("WeaveScheduler — kind-stratified ready check", () => {
+  /**
+   * Build a 2-Phase meta-blueprint: Phase 1 has one Planning Node, Phase 2
+   * has one Planning Node. Both Planning Nodes have empty dependsOn (the
+   * meta-planner doesn't set cross-Phase dependencies — Phase ordering
+   * is enforced by the scheduler's kind-stratified check).
+   */
+  function makeTwoPhaseMetaBlueprint(): Blueprint {
+    const phase1Id = WeavePhaseId.make("phase-1");
+    const phase2Id = WeavePhaseId.make("phase-2");
+    return Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(1),
+      nodes: [
+        {
+          id: WeaveNodeId.make("phase-1-planner"),
+          title: "Phase 1 Planner",
+          description: "",
+          kind: "planning",
+          phaseId: phase1Id,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+        {
+          id: WeaveNodeId.make("phase-2-planner"),
+          title: "Phase 2 Planner",
+          description: "",
+          kind: "planning",
+          phaseId: phase2Id,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        { id: phase1Id, ordinal: 0, title: "Phase 1", description: "", approval: "pending" },
+        { id: phase2Id, ordinal: 1, title: "Phase 2", description: "", approval: "pending" },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: now(),
+      compiledBy: "planner",
+    });
+  }
+
+  it("dispatches Phase 1's Planning Node first when run starts", async () => {
+    const projectId = "project-kind-1";
+    const runId = "run-kind-1";
+    const system = await createSchedulerSystem("t3-scheduler-kind-1-");
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis"); // allow subscriber to attach
+
+          yield* Effect.promise(() => seedProject(system.orchestrationEngine, projectId));
+          yield* Effect.promise(() =>
+            seedRunningWeaveRun(system.weaveEngine, {
+              runId,
+              projectId,
+              blueprint: makeTwoPhaseMetaBlueprint(),
+            }),
+          );
+
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    expect(system.stubGit.getCallCount()).toBe(1);
+    expect(system.stubGit.worktreeCalls[0]?.newBranch).toMatch(/phase-1-planner/);
+
+    await system.dispose();
+  });
+
+  it("does NOT dispatch Phase 2's Planning Node while Phase 1's Planning Node is still pending", async () => {
+    const projectId = "project-kind-2";
+    const runId = "run-kind-2";
+    const system = await createSchedulerSystem("t3-scheduler-kind-2-");
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis"); // allow subscriber to attach
+
+          yield* Effect.promise(() => seedProject(system.orchestrationEngine, projectId));
+          yield* Effect.promise(() =>
+            seedRunningWeaveRun(system.weaveEngine, {
+              runId,
+              projectId,
+              blueprint: makeTwoPhaseMetaBlueprint(),
+            }),
+          );
+
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    // Only Phase 1's Planning Node dispatched; Phase 2's Planning Node is
+    // gated by the kind-stratified check.
+    expect(system.stubGit.getCallCount()).toBe(1);
+    const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("phase-2-planner"))?.status).toBe("pending");
+
+    await system.dispose();
+  });
+
+  it("dispatches Phase 2's Planning Node once every Phase 1 node is verified", async () => {
+    const projectId = "project-kind-3";
+    const runId = "run-kind-3";
+    const system = await createSchedulerSystem("t3-scheduler-kind-3-");
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis"); // allow subscriber to attach
+
+          yield* Effect.promise(() => seedProject(system.orchestrationEngine, projectId));
+          yield* Effect.promise(() =>
+            seedRunningWeaveRun(system.weaveEngine, {
+              runId,
+              projectId,
+              blueprint: makeTwoPhaseMetaBlueprint(),
+            }),
+          );
+
+          yield* system.scheduler.drain;
+
+          // Manually mark phase-1-planner verified via a system event so the
+          // kind-stratified check unblocks Phase 2.
+          yield* system.orchestrationEngine.appendSystemEvent({
+            eventId: EventId.make(crypto.randomUUID()),
+            aggregateKind: "weave",
+            aggregateId: WeaveRunId.make(runId),
+            type: "weave.node-verified",
+            occurredAt: now(),
+            commandId: null,
+            causationEventId: null,
+            correlationId: null,
+            metadata: {},
+            payload: {
+              weaveRunId: WeaveRunId.make(runId),
+              nodeId: WeaveNodeId.make("phase-1-planner"),
+              verifierOutcome: "ok",
+              occurredAt: now(),
+            },
+          });
+
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    // Both planning nodes have been dispatched (Phase 1 at run start, Phase
+    // 2 after Phase 1's planner verified).
+    expect(system.stubGit.getCallCount()).toBe(2);
+    const branches = system.stubGit.worktreeCalls.map((c) => c.newBranch ?? "");
+    expect(branches.some((b) => b.includes("phase-1-planner"))).toBe(true);
+    expect(branches.some((b) => b.includes("phase-2-planner"))).toBe(true);
+
+    await system.dispose();
+  });
+
+  it("Tasks (kind != 'planning') still use dependsOn-based ready check", async () => {
+    // This is a regression check. Reuse the existing 2-node blueprint helper
+    // (makeTwoNodeBlueprint, which has node-a + node-b where b depends on a,
+    // both kind 'raw'). Ensure node-a dispatches first; node-b only after a
+    // is verified.
+    const projectId = "project-kind-4";
+    const runId = "run-kind-4";
+    const system = await createSchedulerSystem("t3-scheduler-kind-4-");
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis"); // allow subscriber to attach
+
+          yield* Effect.promise(() => seedProject(system.orchestrationEngine, projectId));
+          yield* Effect.promise(() =>
+            seedRunningWeaveRun(system.weaveEngine, {
+              runId,
+              projectId,
+              blueprint: makeTwoNodeBlueprint(),
+            }),
+          );
+
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    // Only node-a dispatched (node-b waits on node-a verifying).
+    expect(system.stubGit.getCallCount()).toBe(1);
+    expect(system.stubGit.worktreeCalls[0]?.newBranch).toMatch(/node-a/);
+
+    await system.dispose();
+  });
+});
