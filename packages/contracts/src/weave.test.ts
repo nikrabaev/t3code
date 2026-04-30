@@ -889,6 +889,25 @@ it.effect("rejects WeavePlannerThreadCreatedPayload with missing threadId", () =
   }),
 );
 
+import { WeaveBlueprintCompileReason } from "./weave.ts";
+
+const decodeWeaveBlueprintCompileReason = Schema.decodeUnknownEffect(WeaveBlueprintCompileReason);
+
+it.effect("accepts every WeaveBlueprintCompileReason literal", () =>
+  Effect.gen(function* () {
+    for (const r of ["initial", "amendment", "redesign", "phase-planning"] as const) {
+      assert.strictEqual(yield* decodeWeaveBlueprintCompileReason(r), r);
+    }
+  }),
+);
+
+it.effect("rejects an unknown WeaveBlueprintCompileReason", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(decodeWeaveBlueprintCompileReason("nope"));
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
 import { WeaveNodeMeta, WeaveRunProjectionSchema } from "./weave.ts";
 
 const decodeWeaveNodeMeta = Schema.decodeUnknownEffect(WeaveNodeMeta);

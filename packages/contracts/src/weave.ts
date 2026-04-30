@@ -297,7 +297,12 @@ export type WeaveDispatchableCommand = typeof WeaveDispatchableCommand.Type;
 // Emitted by WeavePlanner, WeaveScheduler, WeaveContractConformer reactors
 // in Slice 3. Must not be accepted from the client.
 
-export const WeaveBlueprintCompileReason = Schema.Literals(["initial", "amendment", "redesign"]);
+export const WeaveBlueprintCompileReason = Schema.Literals([
+  "initial",
+  "amendment",
+  "redesign",
+  "phase-planning",
+]);
 export type WeaveBlueprintCompileReason = typeof WeaveBlueprintCompileReason.Type;
 
 export const WeaveBlueprintCompileCommand = Schema.Struct({
