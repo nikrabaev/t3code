@@ -25,6 +25,7 @@ import {
   WeaveBlueprintApproveCommand,
   WeaveBlueprintCompileCommand,
   WeaveBlueprintCompiledPayload,
+  WeaveBlueprintExtendCommand,
   WeaveBlueprintExtendedPayload,
   WeaveCreateCommand,
   WeaveCreatedPayload,
@@ -837,6 +838,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadRevertCompleteCommand,
   // --- Weave internal commands ---
   WeaveBlueprintCompileCommand,
+  WeaveBlueprintExtendCommand,
   WeaveNodeDispatchCommand,
   WeaveNodeVerifiedCommand,
   WeaveNodeFailedCommand,

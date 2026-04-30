@@ -349,6 +349,20 @@ export function projectWeaveEvent(
       });
       return Effect.succeed({ ...state, nodeMeta: nextNodeMeta });
     }
+    case "weave.blueprint-extended": {
+      // TODO(slice-2): applied by WeaveScheduler when a planning node's
+      // sub-DAG is appended to the blueprint. For Slice 1 this event is
+      // never emitted at runtime, so the projection is returned unchanged.
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.blueprint-extended requires existing projection (null received).`,
+          }),
+        );
+      }
+      return Effect.succeed(state);
+    }
     default: {
       const _exhaustive: never = event;
       void _exhaustive;

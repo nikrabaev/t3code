@@ -1066,7 +1066,9 @@ it.effect("round-trips WeaveRunProjectionSchema with populated nodeMeta entries"
 
 import { WeaveBlueprintExtendedPayload } from "./weave.ts";
 
-const decodeWeaveBlueprintExtendedPayload = Schema.decodeUnknownEffect(WeaveBlueprintExtendedPayload);
+const decodeWeaveBlueprintExtendedPayload = Schema.decodeUnknownEffect(
+  WeaveBlueprintExtendedPayload,
+);
 
 it.effect("round-trips a WeaveBlueprintExtendedPayload", () =>
   Effect.gen(function* () {

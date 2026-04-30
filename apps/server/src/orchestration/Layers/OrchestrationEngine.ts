@@ -66,6 +66,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       };
     case "weave.create":
     case "weave.blueprint.approve":
+    case "weave.blueprint.extend":
     case "weave.phase.approve":
     case "weave.decision.resolve":
     case "weave.exit":

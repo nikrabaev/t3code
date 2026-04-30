@@ -422,6 +422,12 @@ export function decideWeaveCommand(input: {
         ];
       });
     }
+    case "weave.blueprint.extend": {
+      // TODO(slice-2): handled by WeaveScheduler when meta-planner emits a
+      // sub-DAG extension. For Slice 1 the runtime never produces this command,
+      // so no events are emitted here.
+      return Effect.succeed([]);
+    }
     default: {
       const _exhaustive: never = command;
       void _exhaustive;
