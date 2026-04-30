@@ -689,3 +689,15 @@ Run through this once Task 7 is done.
 ## What ships at end of Slice 1
 
 A typechecking, fully-tested set of schemas covering every contract incremental planning needs. **Runtime behavior unchanged** — the new event type is never emitted, the new command is never accepted, the new node kind is never produced. Slice 2 (meta-planner refactor) starts wiring the runtime to use these contracts.
+
+---
+
+## Outcome (post-implementation)
+
+Slice 1 shipped on branch `nikrabaev/weave` as commits `0d07409d..91f50760` (10 commits). Two deviations from this plan are worth recording for the Slice 2 author:
+
+1. **Task 7 also extended `InternalOrchestrationCommand`.** This plan only anticipated `WeaveNodeKind` exhaustive switches breaking under the new `"planning"` literal. The actual typecheck failures came from `WeaveBlueprintExtendCommand` being added to `WeaveInternalCommand` (Task 5) without a corresponding addition to `InternalOrchestrationCommand` in `packages/contracts/src/orchestration.ts` — that broke `WeaveCommand ⊆ OrchestrationCommand`. The fix added `WeaveBlueprintExtendCommand` to `InternalOrchestrationCommand` and added no-op `case` arms in `weaveDecider.ts`, `weaveProjector.ts`, `decider.ts`, and `OrchestrationEngine.ts` (commit `14d997a3`). The no-ops are intentionally minimal and carry `TODO(slice-2)` comments. **`weaveDecider.ts`'s no-op skips `requireRun` — Slice 2/3 must add it when implementing the real handler.**
+
+2. **Task 7 also produced a `style(docs)` formatter sweep.** `bun fmt` reformatted ~18 docs / plan files (whitespace, table reflow, italics-style). Per the plan's literal "stage the formatting fixes" instruction these would have all landed in the feat commit. They were split out into commit `91f50760` (`style(docs): apply formatter to weave docs and plans`) so the feat commit stays narrow.
+
+For the up-to-date inventory of pre-wired surfaces and Slice 2 hazards, see the **Implementation status** section of [the design doc](../specs/2026-04-30-weave-incremental-planning-design.md#implementation-status).

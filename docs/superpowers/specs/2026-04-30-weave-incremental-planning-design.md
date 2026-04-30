@@ -190,6 +190,76 @@ Suggested slicing for the implementation plan (refined further in writing-plans)
 
 Each slice typechecks and tests on its own.
 
+## Implementation status
+
+### Slice 1 — schema deltas (SHIPPED, branch `nikrabaev/weave`)
+
+Plan: [`docs/superpowers/plans/2026-04-30-weave-incremental-planning-slice-1.md`](../plans/2026-04-30-weave-incremental-planning-slice-1.md).
+Range: `0d07409d..91f50760` (10 commits).
+
+**Schemas now present in `packages/contracts/src/weave.ts`:**
+
+- `WeaveNodeKind` includes `"planning"`.
+- `WeaveBlueprintCompileReason` includes `"phase-planning"`.
+- `WeaveRun.planningDepthCap: Schema.optional(NonNegativeInt)` — the field is optional at the schema layer; the design's "default 3" is **not** yet enforced anywhere. Slice 2 or 3 must add a runtime constructor / decider rule that supplies the default.
+- `WeaveBlueprintExtendedPayload` (event payload).
+- `WeaveBlueprintExtendCommand` (server-only internal command, type literal `"weave.blueprint.extend"`).
+- `WeaveBlueprintExtendCommand` is in the `WeaveInternalCommand` union.
+
+**Schemas now present in `packages/contracts/src/orchestration.ts`:**
+
+- `OrchestrationEventType` includes `"weave.blueprint-extended"`; `OrchestrationEvent` union has the matching `Schema.Struct` variant.
+- `WeaveBlueprintExtendCommand` is in `InternalOrchestrationCommand` (added during typecheck guard pass — was not in the original Slice 1 plan but was necessary so `WeaveCommand ⊆ OrchestrationCommand` continues to hold).
+
+**Runtime no-ops added to make `bun typecheck` pass (do NOT delete in slice 2):**
+
+- [`apps/server/src/orchestration/weaveDecider.ts`](../../../apps/server/src/orchestration/weaveDecider.ts) has `case "weave.blueprint.extend": return Effect.succeed([])` with a `TODO(slice-2)` comment. **Slice 2/3 implementer note:** when wiring the real handler, add `yield* requireRun({ projection, command })` first — every other substantive case in `decideWeaveCommand` does this and the no-op intentionally skips it.
+- [`apps/server/src/orchestration/weaveProjector.ts`](../../../apps/server/src/orchestration/weaveProjector.ts) has `case "weave.blueprint-extended"` with the standard "null projection ⇒ `OrchestrationProjectorDecodeError`" guard, then returns state unchanged. The guard pattern matches the existing `weave.planner.thread-created` handler — reuse that template when implementing the real version handler.
+- [`apps/server/src/orchestration/decider.ts`](../../../apps/server/src/orchestration/decider.ts) routes `"weave.blueprint.extend"` to the weave aggregate arm.
+- [`apps/server/src/orchestration/Layers/OrchestrationEngine.ts`](../../../apps/server/src/orchestration/Layers/OrchestrationEngine.ts) has `commandToAggregateRef` resolving `"weave.blueprint.extend"` → `aggregateKind: "weave"`.
+
+**Runtime invariant preserved:** no code emits the new event, accepts the new command, or constructs a `kind: "planning"` Node. The `WeavePlanner` is unchanged and still emits the old monolithic Blueprint shape.
+
+### Slice 2 — meta-planner (NEXT)
+
+**Goal:** split `WeavePlanner` into `MetaPlanner` (Vision → Phase list with one Planning Node per Phase, zero Tasks) + prompt. The intake `weave.blueprint.compile { reason: "initial" }` flow now produces this shape. No `weave.blueprint.extend` is emitted yet — that is Slice 3.
+
+**Files in scope:**
+
+| File | Likely change |
+|---|---|
+| [`apps/server/src/orchestration/Layers/WeavePlanner.ts`](../../../apps/server/src/orchestration/Layers/WeavePlanner.ts) (228 lines) | Rename internally to `MetaPlannerLive` (or keep `WeavePlannerLive` as the wiring shell and split out a `MetaPlanner` service). Emit `kind: "planning"` Nodes. |
+| [`apps/server/src/orchestration/Layers/plannerPrompt.ts`](../../../apps/server/src/orchestration/Layers/plannerPrompt.ts) (132 lines) | Replace with `buildMetaPlannerPrompt`. Constrain the JSON output to Phases + one Planning Node per Phase. |
+| [`apps/server/src/orchestration/Services/WeavePlanner.ts`](../../../apps/server/src/orchestration/Services/WeavePlanner.ts) (35 lines) | Possibly split into a `MetaPlanner` service interface; keep `WeavePlanner` as an alias if other code consumes it. |
+| [`apps/server/src/orchestration/Layers/WeavePlanner.test.ts`](../../../apps/server/src/orchestration/Layers/WeavePlanner.test.ts), [`plannerPrompt.test.ts`](../../../apps/server/src/orchestration/Layers/plannerPrompt.test.ts) | Update fixtures; new tests for the meta-plan shape. |
+
+**What's pre-wired (do not duplicate):** the `"planning"` literal, the `"phase-planning"` reason, and `planningDepthCap` are all already in the contracts. Just construct Nodes with `kind: "planning"` and (when applicable) emit `weave.blueprint.compile { reason: "phase-planning" }` once Slice 3 lands.
+
+**Hazards:**
+
+- **`apps/server/src/orchestration/weaveIntegration.test.ts` is broken on `main` and on the Slice 1 branch** — pre-existing failure unrelated to Slice 1 (commit `040f979f` switched the conformer's verifier from `"bun run test"` to `"npm run test"`, which the test's stub harness doesn't simulate). Slice 2 will need to update that integration test for the new meta-plan shape anyway; fix the conformer-signal regression at the same time. Don't be misled into thinking Slice 1 broke it.
+- **`WeavePhase` and `WeaveContract` shapes are unchanged.** A meta-plan still emits Phases — it just emits Phases that contain exactly one Planning Node and zero Tasks. The Blueprint schema stays as-is.
+- **The "default 3" for `planningDepthCap`.** Slice 1 only added the optional field. The runtime default has to live somewhere — either the `WeaveCreate` decider arm (most natural — fill in a default at run-creation time), or the Planning Node dispatch path (when checking `depth ≥ cap`). Pick a place and document it; the Slice 2 plan should specify which.
+- **`WeaveContractConformer` does not yet recognize `kind === "planning"`.** It will treat a Planning Node like a Raw Node and try to verify it via command. Slice 2 doesn't dispatch Planning Nodes (no Slice 3 yet), but if any test path runs through the conformer with a `kind: "planning"` Node it will misbehave. Either Slice 2 adds the conformer no-op (a precursor of Slice 3's schema-validation path), or Slice 2 tests must avoid driving Planning Nodes through dispatch.
+
+**Notes for the Slice 2 plan author:**
+
+- The `WeaveBlueprintExtendCommand` no-op in `weaveDecider.ts` has a doctrine gap (skips `requireRun`). That's intentional for Slice 1 and is on Slice 3 to fix when the real handler lands. Slice 2 doesn't need to touch it.
+- If Slice 2 ends up wanting to extend `OrchestrationEvent` further or add an additional internal command, follow the Slice 1 pattern: add to both `WeaveInternalCommand` (in `weave.ts`) AND `InternalOrchestrationCommand` (in `orchestration.ts`) — only the former isn't enough.
+- The `"WeaveInternalCommand union decodes every variant"` test in `packages/contracts/src/weave.test.ts:683` already only covers 2 of 5 variants. If Slice 2 adds another variant or you update the test to actually cover every variant, that's a welcome cleanup.
+
+### Slice 3 — phase planner + extend flow
+
+Pre-wired by Slice 1: the command, the event, the projector + decider routing, and the projector null guard. Slice 3 fleshes out the decider arm (add `requireRun`, then bump `BlueprintVersion` and append nodes), the projector arm (apply the delta), and the `WeavePhasePlanner` agent + prompt + JSON decoder. Conformer's `kind === "planning"` schema-validation path also lives here.
+
+### Slice 4 — scheduler integration
+
+No Slice 1 pre-wiring. Adds auto-dispatch transitions and the per-Phase gate that fires at the post-`phase-planning` version bump.
+
+### Slice 5 — web
+
+Renders Planning Nodes inline; multi-gate approval UX. No Slice 1 pre-wiring beyond the new `OrchestrationEvent` variant flowing through the existing event-stream.
+
 ## Open implementation questions
 
 - **Phase-Planner JSON schema.** Needs a tight Effect Schema (input contracts referenced by id, write-set globs, etc.). Can be derived from a subset of the existing Blueprint schema, restricted to "things appendable under a Phase." Defining this schema precisely is Slice 3 work, not design-level.
