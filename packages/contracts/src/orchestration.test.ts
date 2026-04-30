@@ -724,6 +724,31 @@ it.effect("decodes weave.blueprint-compiled event via OrchestrationEvent", () =>
   }),
 );
 
+it.effect("decodes a weave.blueprint-extended event", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationEvent({
+      sequence: 1,
+      eventId: "event-1",
+      aggregateKind: "weave",
+      aggregateId: "run-1",
+      type: "weave.blueprint-extended",
+      occurredAt: "2026-04-30T00:00:00.000Z",
+      commandId: "cmd-1",
+      causationEventId: null,
+      correlationId: "cmd-1",
+      metadata: {},
+      payload: {
+        weaveRunId: "run-1",
+        version: 2,
+        plannerNodeId: "phase-1-planner",
+        addedNodeIds: ["task-1"],
+        occurredAt: "2026-04-30T00:00:00.000Z",
+      },
+    });
+    assert.strictEqual(parsed.type, "weave.blueprint-extended");
+  }),
+);
+
 it.effect("decodes weave.node-dispatched event via OrchestrationEvent", () =>
   Effect.gen(function* () {
     const event = yield* decodeOrchestrationEvent({

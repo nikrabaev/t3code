@@ -25,6 +25,7 @@ import {
   WeaveBlueprintApproveCommand,
   WeaveBlueprintCompileCommand,
   WeaveBlueprintCompiledPayload,
+  WeaveBlueprintExtendedPayload,
   WeaveCreateCommand,
   WeaveCreatedPayload,
   WeaveDecisionResolveCommand,
@@ -874,6 +875,7 @@ export const OrchestrationEventType = Schema.Literals([
   // Weave events (Slice 1)
   "weave.created",
   "weave.blueprint-compiled",
+  "weave.blueprint-extended",
   "weave.blueprint-approved",
   "weave.node-dispatched",
   "weave.node-verified",
@@ -1216,6 +1218,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("weave.blueprint-compiled"),
     payload: WeaveBlueprintCompiledPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("weave.blueprint-extended"),
+    payload: WeaveBlueprintExtendedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
