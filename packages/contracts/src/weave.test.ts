@@ -1101,7 +1101,6 @@ it.effect("rejects a WeaveBlueprintExtendedPayload missing plannerNodeId", () =>
 import { WeaveBlueprintExtendCommand } from "./weave.ts";
 
 const decodeWeaveBlueprintExtendCommand = Schema.decodeUnknownEffect(WeaveBlueprintExtendCommand);
-const decodeWeaveInternalCommand = Schema.decodeUnknownEffect(WeaveInternalCommand);
 
 it.effect("round-trips a WeaveBlueprintExtendCommand", () =>
   Effect.gen(function* () {
@@ -1121,7 +1120,7 @@ it.effect("round-trips a WeaveBlueprintExtendCommand", () =>
 
 it.effect("WeaveInternalCommand union accepts weave.blueprint.extend", () =>
   Effect.gen(function* () {
-    const parsed = yield* decodeWeaveInternalCommand({
+    const parsed = yield* decodeWeaveInternal({
       type: "weave.blueprint.extend",
       commandId: "cmd-2",
       weaveRunId: "run-1",
