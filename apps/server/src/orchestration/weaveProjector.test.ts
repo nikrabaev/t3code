@@ -55,6 +55,7 @@ describe("projectWeaveEvent — weave.created", () => {
     expect(result.run.title).toBe("Test Run");
     expect(result.run.status).toBe("draft");
     expect(result.run.concurrencyCap).toBe(1);
+    expect(result.run.planningDepthCap).toBe(3);
     expect(result.currentBlueprint).toBeNull();
     expect(result.nodeMeta.size).toBe(0);
     expect(result.openDecisions.size).toBe(0);

@@ -43,6 +43,7 @@ export function createEmptyWeaveProjection(params: {
   readonly snapshotContent?: string;
   readonly status: WeaveRunStatus;
   readonly concurrencyCap: number;
+  readonly planningDepthCap: number;
   readonly createdAt: IsoDateTime;
 }): WeaveRunProjection {
   const run: WeaveRun = {
@@ -55,6 +56,7 @@ export function createEmptyWeaveProjection(params: {
     snapshotContent: params.snapshotContent,
     status: params.status,
     concurrencyCap: params.concurrencyCap as never,
+    planningDepthCap: params.planningDepthCap as never,
     createdAt: params.createdAt,
   };
   return {
@@ -107,6 +109,7 @@ export function projectWeaveEvent(
           }),
           status: "draft",
           concurrencyCap: 1,
+          planningDepthCap: 3,
           createdAt: payload.occurredAt,
         }),
       );

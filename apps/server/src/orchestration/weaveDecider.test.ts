@@ -26,6 +26,7 @@ const emptyProjection = (runId = "run-1"): WeaveRunProjection =>
     vision: "",
     status: "draft",
     concurrencyCap: 1,
+    planningDepthCap: 3,
     createdAt: now,
   });
 
@@ -54,6 +55,7 @@ function buildRunningProjection(params: {
     vision: "",
     status: "running",
     concurrencyCap: 1,
+    planningDepthCap: 3,
     createdAt: now,
   });
   return {

@@ -45,6 +45,7 @@ const emptyProjection = (): WeaveRunProjection =>
     vision: "",
     status: "draft",
     concurrencyCap: 1,
+    planningDepthCap: 3,
     createdAt: now,
   });
 
