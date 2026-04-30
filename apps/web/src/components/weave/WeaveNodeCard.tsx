@@ -42,7 +42,17 @@ export function WeaveNodeCard({
         {WEAVE_STATUS_ICON[status]}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{node.title}</div>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium truncate">{node.title}</span>
+          {node.kind === "planning" && (
+            <span
+              className="shrink-0 inline-block rounded border border-cyan-500/30 bg-cyan-500/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-cyan-700 dark:text-cyan-300"
+              aria-label="Planning Node"
+            >
+              Planning
+            </span>
+          )}
+        </div>
         {node.dependsOn.length > 0 && (
           <div className="text-xs text-muted-foreground flex gap-1 flex-wrap mt-1">
             {node.dependsOn.map((dep) => (

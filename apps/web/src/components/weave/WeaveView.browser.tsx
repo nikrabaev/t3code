@@ -1,5 +1,5 @@
 // Production CSS is part of the behavior under test.
-import "../index.css";
+import "../../index.css";
 
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -888,6 +888,108 @@ describe("WeaveView browser tests", () => {
         },
         { timeout: 8_000, interval: 16 },
       );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Test N: planning kind badge renders for planning nodes only
+  // --------------------------------------------------------------------------
+  it("renders a 'Planning' badge for kind=planning nodes and not for other kinds", async () => {
+    const snapshot = createBaseSnapshot();
+    const phaseId = PHASE_ID;
+    const plannerNodeId = "phase-1-planner" as WeaveNodeId;
+    const taskNodeId = "phase-1-task" as WeaveNodeId;
+    const customBlueprint = {
+      version: 1 as BlueprintVersion,
+      nodes: [
+        {
+          id: plannerNodeId,
+          title: "Phase 1 Planner",
+          description: "Plan Phase 1",
+          kind: "planning" as const,
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending" as const,
+        },
+        {
+          id: taskNodeId,
+          title: "Phase 1 Task",
+          description: "Do work",
+          kind: "raw" as const,
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [plannerNodeId],
+          status: "pending" as const,
+        },
+      ],
+      phases: [
+        {
+          id: phaseId,
+          ordinal: 0 as number & { readonly NonNegativeInt: unique symbol },
+          title: "Phase 1: Core",
+          description: "",
+          approval: "pending" as const,
+        },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: NOW_ISO,
+      compiledBy: "planner" as const,
+    };
+    const projection: WeaveRunProjection = {
+      run: {
+        id: WEAVE_RUN_ID,
+        projectId: PROJECT_ID,
+        title: "test",
+        vision: "test",
+        status: "running",
+        concurrencyCap: 1,
+        createdAt: NOW_ISO,
+      },
+      currentBlueprint: customBlueprint,
+      nodeMeta: new Map<WeaveNodeId, WeaveNodeMeta>([
+        [plannerNodeId, { status: "pending" }],
+        [taskNodeId, { status: "pending" }],
+      ]),
+      openDecisions: new Set(),
+      autoDecisionLog: [],
+      phaseApprovals: new Map(),
+      childThreads: new Map(),
+    };
+
+    const mounted = await mountApp({
+      snapshot,
+      initialPath: `/${LOCAL_ENVIRONMENT_ID}/weave/${WEAVE_RUN_ID}`,
+      weaveRunProjection: projection,
+    });
+
+    try {
+      // Wait for the planner node card to render.
+      await vi.waitFor(
+        () => {
+          const cards = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
+          const plannerCard = cards.find((c) => c.textContent?.includes("Phase 1 Planner"));
+          expect(plannerCard, "Planner card should render").toBeTruthy();
+          // Badge text "Planning" should be inside the planner card.
+          expect(plannerCard?.textContent).toContain("Planning");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      // The non-planning task card should NOT contain the badge text.
+      const cards = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
+      const taskCard = cards.find((c) => c.textContent?.includes("Phase 1 Task"));
+      expect(taskCard, "Task card should render").toBeTruthy();
+      expect(taskCard?.textContent ?? "").not.toContain("Planning");
     } finally {
       await mounted.cleanup();
     }
