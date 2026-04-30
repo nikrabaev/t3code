@@ -1111,12 +1111,28 @@ it.effect("round-trips a WeaveBlueprintExtendCommand", () =>
       commandId: "cmd-1",
       weaveRunId: "run-1",
       plannerNodeId: "phase-1-planner",
-      addedNodeIds: ["task-1"],
+      addedNodes: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          description: "First task in phase 1",
+          kind: "raw",
+          phaseId: "phase-1",
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "bun run test",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
       createdAt: "2026-04-30T00:00:00.000Z",
     });
     assert.strictEqual(parsed.type, "weave.blueprint.extend");
     assert.strictEqual(parsed.plannerNodeId, "phase-1-planner");
-    assert.deepStrictEqual(parsed.addedNodeIds, ["task-1"]);
+    assert.strictEqual(parsed.addedNodes.length, 1);
+    assert.strictEqual(parsed.addedNodes[0]?.id, "task-1");
+    assert.strictEqual(parsed.addedNodes[0]?.kind, "raw");
   }),
 );
 
@@ -1127,9 +1143,74 @@ it.effect("WeaveInternalCommand union accepts weave.blueprint.extend", () =>
       commandId: "cmd-2",
       weaveRunId: "run-1",
       plannerNodeId: "phase-1-planner",
-      addedNodeIds: [],
+      addedNodes: [],
       createdAt: "2026-04-30T00:00:00.000Z",
     });
     assert.strictEqual(parsed.type, "weave.blueprint.extend");
+  }),
+);
+
+import { PhasePlannerOutput } from "./weave.ts";
+
+const decodePhasePlannerOutput = Schema.decodeUnknownEffect(PhasePlannerOutput);
+
+it.effect("decodes a PhasePlannerOutput with one task", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodePhasePlannerOutput({
+      addedNodes: [
+        {
+          id: "task-1",
+          title: "Build foo",
+          description: "build foo",
+          kind: "raw",
+          phaseId: "phase-1",
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "bun run test",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+    });
+    assert.strictEqual(parsed.addedNodes.length, 1);
+    assert.strictEqual(parsed.addedNodes[0]?.id, "task-1");
+  }),
+);
+
+it.effect("decodes a PhasePlannerOutput with empty addedNodes (Phase concluded as no-op)", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodePhasePlannerOutput({ addedNodes: [] });
+    assert.strictEqual(parsed.addedNodes.length, 0);
+  }),
+);
+
+it.effect("rejects a PhasePlannerOutput missing addedNodes", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(decodePhasePlannerOutput({}));
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("rejects a PhasePlannerOutput where a node lacks required fields", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodePhasePlannerOutput({
+        addedNodes: [{ id: "task-1" }],
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+import { BlueprintSource } from "./weave.ts";
+
+const decodeBlueprintSource = Schema.decodeUnknownEffect(BlueprintSource);
+
+it.effect("BlueprintSource includes 'phase-planning'", () =>
+  Effect.gen(function* () {
+    for (const s of ["planner", "amendment", "redesign", "phase-planning"] as const) {
+      assert.strictEqual(yield* decodeBlueprintSource(s), s);
+    }
   }),
 );

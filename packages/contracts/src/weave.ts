@@ -157,7 +157,14 @@ export type WeaveNode = typeof WeaveNode.Type;
 
 // Blueprint — the compiled DAG. The only globally shared state in Weave mode.
 // Versioned; every recompile (initial, amendment, redesign) yields a new version.
-export const BlueprintSource = Schema.Literals(["planner", "amendment", "redesign"]);
+export const BlueprintSource = Schema.Literals([
+  "planner",
+  "amendment",
+  "redesign",
+  // Slice 3: tags Blueprint versions produced by a Planning Node's emission
+  // (see WeaveBlueprintCompileReason).
+  "phase-planning",
+]);
 export type BlueprintSource = typeof BlueprintSource.Type;
 
 export const Blueprint = Schema.Struct({
@@ -362,10 +369,29 @@ export const WeaveBlueprintExtendCommand = Schema.Struct({
   commandId: CommandId,
   weaveRunId: WeaveRunId,
   plannerNodeId: WeaveNodeId,
-  addedNodeIds: Schema.Array(WeaveNodeId),
+  // The full content of the nodes to append. The decider extracts the IDs
+  // for the corresponding `WeaveBlueprintExtendedPayload.addedNodeIds`.
+  addedNodes: Schema.Array(WeaveNode),
   createdAt: IsoDateTime,
 });
 export type WeaveBlueprintExtendCommand = typeof WeaveBlueprintExtendCommand.Type;
+
+// PhasePlannerOutput — the JSON shape a Phase Planner agent emits when it
+// finishes running. The conformer parses the agent's accumulated assistant
+// text against this schema. On success, the conformer dispatches
+// `weave.blueprint.extend` with the same addedNodes; on failure (parse error
+// or schema mismatch), it dispatches `weave.node.failed`.
+//
+// Slice 3 simplification: addedNodes must NOT include any node with
+// kind: "planning". Recursion (mid-Phase Planning Nodes that emit further
+// sub-DAGs) requires depth tracking on WeaveNode and is deferred to a
+// later slice. The decider for weave.blueprint.extend enforces this; the
+// schema itself does not, because Schema-level enforcement would require
+// a refinement that is awkward to compose with `Schema.Array(WeaveNode)`.
+export const PhasePlannerOutput = Schema.Struct({
+  addedNodes: Schema.Array(WeaveNode),
+});
+export type PhasePlannerOutput = typeof PhasePlannerOutput.Type;
 
 export const WeaveInternalCommand = Schema.Union([
   WeaveBlueprintCompileCommand,
