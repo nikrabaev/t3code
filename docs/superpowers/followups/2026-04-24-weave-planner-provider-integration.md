@@ -42,6 +42,7 @@ Resolved 2026-04-25 in plan
 Tag: `weave-v0.1-planner-integrated`.
 
 Implementation:
+
 - `ThreadKind = "chat" | "planner"` added to `OrchestrationThread` /
   `OrchestrationThreadShell`; `kind` column on `projection_threads` (migration 026).
 - New `weave.planner.thread-created` domain event; projector materialises a hidden

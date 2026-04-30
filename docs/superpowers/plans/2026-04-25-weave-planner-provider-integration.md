@@ -94,6 +94,7 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
 ## Task 1: Contracts — `ThreadKind` + `WeavePlannerSettings`
 
 **Files:**
+
 - Modify `packages/contracts/src/orchestration.ts` — add `ThreadKind` schema; extend `OrchestrationThread` with `kind` field (decoding default `"chat"`).
 - Modify `packages/contracts/src/orchestration.test.ts` — round-trip tests.
 - Modify `packages/contracts/src/settings.ts` — add `WeavePlannerSettings` (provider + modelSelection) and graft onto `ServerSettings.weave.planner`. Provide a default matching whatever Claude model is current.
@@ -147,12 +148,10 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
   ```
 
 - [ ] **Step 1.4: Tests.** Add to `orchestration.test.ts`:
-
   - `OrchestrationThread` decodes a payload that omits `kind` and yields `kind === "chat"`.
   - `OrchestrationThread` decodes a payload with `kind: "planner"` round-trip.
 
   Add to `settings.test.ts` (or create if absent):
-
   - `ServerSettings` decodes `{}` and `weave.planner.provider === "claudeAgent"` (or whatever default).
   - Override `weave.planner.provider = "codex"` round-trips.
 
@@ -181,6 +180,7 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
 ## Task 2: DB migration — `kind` column on `projection_threads`
 
 **Files:**
+
 - Create `apps/server/src/persistence/Migrations/020_ProjectionThreadsKind.ts`.
 - Modify `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts` — include `kind` in the SELECT.
 - Modify the thread projector (grep for where `thread.created` writes `INSERT INTO projection_threads`) — write `kind`.
@@ -232,6 +232,7 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
 ## Task 3: Sidebar — filter out `kind === "planner"` threads
 
 **Files:**
+
 - Modify `apps/web/src/components/Sidebar.tsx` — filter `thread.kind !== "planner"` in the per-project thread list.
 - Modify any thread-list selector that powers the chat sidebar (grep for `selectThreads` / `useThreadsForProject`).
 - Modify `apps/web/src/store.ts` if needed — confirm `kind` is on the state-level thread shape (it should be, since `OrchestrationThread.kind` is part of the contracts now).
@@ -259,6 +260,7 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
 ## Task 4: Real `PlannerDriverLive` + planner prompt + thread-creation event
 
 **Files:**
+
 - Create `apps/server/src/orchestration/Layers/plannerPrompt.ts` — pure prompt builder.
 - Create `apps/server/src/orchestration/Layers/plannerPrompt.test.ts` — golden-string tests.
 - Modify `apps/server/src/orchestration/Layers/PlannerDriver.ts` — replace placeholder with real implementation.
@@ -280,7 +282,7 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
   export const WeavePlannerThreadCreatedEvent = Schema.Struct({
     type: Schema.Literal("weave.planner.thread-created"),
     weaveRunId: WeaveRunId,
-    threadId: ThreadId,         // deterministic: ThreadId.make(`planner-${weaveRunId}`)
+    threadId: ThreadId, // deterministic: ThreadId.make(`planner-${weaveRunId}`)
     projectId: ProjectId,
     title: TrimmedNonEmptyString,
     occurredAt: IsoDateTime,
@@ -373,7 +375,6 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
   This sketch is approximate — actual wiring depends on whether `streamEvents` filter on `threadId`, exact `stopSession` input shape, and how to gracefully halt the stream after `turn.completed`. The implementer should mirror the most analogous existing flow in `apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts` or `Layers/ProviderCommandReactor.ts`.
 
 - [ ] **Step 4.4: Plumb `weaveRunId` through `PlannerDriver.compile`.** The current shape does not include `weaveRunId`. Either:
-
   - **4.4a:** Extend the `PlannerDriverShape.compile` input type to include `weaveRunId: WeaveRunId`. Update `WeavePlanner.ts` (the only caller) to pass it.
   - **4.4b:** Look up the run from `OrchestrationEngineService` inside the driver. Slightly more coupling.
 
@@ -423,7 +424,6 @@ docs/superpowers/followups/2026-04-24-weave-planner-provider-integration.md  —
   ```
 
   In the browser:
-
   1. Pair, create a project, start a chat thread.
   2. Type a vision message and submit.
   3. Type `/weave` (or pick from menu) and press Enter.

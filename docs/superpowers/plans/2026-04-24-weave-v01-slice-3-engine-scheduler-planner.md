@@ -16,33 +16,33 @@
 
 Slice 3 is the first slice with side effects. The five deliverable files per [v0.1-spec.md §Slice 3](../../weave/v0.1-spec.md#slice-3--engine--scheduler--planner--basic-reactors):
 
-| File | New/Modify | Purpose |
-|---|---|---|
-| `apps/server/src/orchestration/Layers/WeaveEngine.ts` | new | Service + Layer. Single writer per run. Persists weave events, broadcasts via `streamDomainEvents`. |
-| `apps/server/src/orchestration/Layers/WeaveScheduler.ts` | new | `DrainableWorker`. Reacts to `weave.blueprint-approved` / `weave.node-verified`, picks next ready Node, allocates worktree via `GitCore`, dispatches `weave.node.dispatch`. |
-| `apps/server/src/orchestration/Layers/WeavePlanner.ts` | new | Invokes `ProviderService` turn, decodes Blueprint, emits `weave.blueprint-compiled`. |
-| `apps/server/src/orchestration/Layers/WeaveContractConformer.ts` | new | Subscribes to `RuntimeReceiptBus` `turn.processing.quiesced` receipts. For weave-child threads, runs `bun run test` in the Node's worktree. Emits `weave.node.verified` or `weave.node.failed`. |
-| `apps/server/src/ws.ts` (and the matching contracts) | modify | Three new dispatchable RPC methods: `weave.create`, `weave.blueprint.approve`, `weave.exit`. Others are server-internal. |
+| File                                                             | New/Modify | Purpose                                                                                                                                                                                         |
+| ---------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/src/orchestration/Layers/WeaveEngine.ts`            | new        | Service + Layer. Single writer per run. Persists weave events, broadcasts via `streamDomainEvents`.                                                                                             |
+| `apps/server/src/orchestration/Layers/WeaveScheduler.ts`         | new        | `DrainableWorker`. Reacts to `weave.blueprint-approved` / `weave.node-verified`, picks next ready Node, allocates worktree via `GitCore`, dispatches `weave.node.dispatch`.                     |
+| `apps/server/src/orchestration/Layers/WeavePlanner.ts`           | new        | Invokes `ProviderService` turn, decodes Blueprint, emits `weave.blueprint-compiled`.                                                                                                            |
+| `apps/server/src/orchestration/Layers/WeaveContractConformer.ts` | new        | Subscribes to `RuntimeReceiptBus` `turn.processing.quiesced` receipts. For weave-child threads, runs `bun run test` in the Node's worktree. Emits `weave.node.verified` or `weave.node.failed`. |
+| `apps/server/src/ws.ts` (and the matching contracts)             | modify     | Three new dispatchable RPC methods: `weave.create`, `weave.blueprint.approve`, `weave.exit`. Others are server-internal.                                                                        |
 
 **Also in scope** — integration plumbing to unblock the above:
 
-| File | Change |
-|---|---|
-| `packages/contracts/src/orchestration.ts` | Add `AggregateRef` discriminated union + `aggregateRefOf(event)` narrow helper; extend `OrchestrationReadModel` with `weaveRuns`. |
-| `packages/contracts/src/orchestration.ts` | Extend `OrchestrationCommandReceiptsAggregateId` to accept `WeaveRunId` (column already TEXT-typed in SQLite; contract-only change). |
-| `apps/server/src/orchestration/decider.ts` | Remove Slice 1 exhaustiveness stub at line 744. Route weave commands to `decideWeaveCommand`. |
-| `apps/server/src/orchestration/projector.ts` | Add weave event cases. For each, look up `state.weaveRuns.get(runId) ?? null`, call `projectWeaveEvent`, write back. |
-| `apps/server/src/orchestration/Layers/OrchestrationEngine.ts` | Remove `as ProjectId \| ThreadId` casts at lines ~187, ~196, ~285 — use `aggregateRefOf`. Remove `aggregateKind !== "weave"` guards around receipt upsert. |
-| `apps/server/src/persistence/Layers/OrchestrationEventStore.ts` | Remove `Effect.die` guard on weave events at line 185. Remove `as ProjectId \| ThreadId` cast. |
-| `apps/server/src/orchestration/Layers/ProjectionPipeline.ts` | Add `applyWeaveRunsProjection` projector entry (stub body is acceptable in v0.1 — in-memory projection on `OrchestrationReadModel` is sufficient for Slice 3). |
-| `apps/server/src/orchestration/runtimeLayer.ts` | Compose the four new Layers into the orchestration runtime. |
+| File                                                            | Change                                                                                                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/src/orchestration.ts`                       | Add `AggregateRef` discriminated union + `aggregateRefOf(event)` narrow helper; extend `OrchestrationReadModel` with `weaveRuns`.                              |
+| `packages/contracts/src/orchestration.ts`                       | Extend `OrchestrationCommandReceiptsAggregateId` to accept `WeaveRunId` (column already TEXT-typed in SQLite; contract-only change).                           |
+| `apps/server/src/orchestration/decider.ts`                      | Remove Slice 1 exhaustiveness stub at line 744. Route weave commands to `decideWeaveCommand`.                                                                  |
+| `apps/server/src/orchestration/projector.ts`                    | Add weave event cases. For each, look up `state.weaveRuns.get(runId) ?? null`, call `projectWeaveEvent`, write back.                                           |
+| `apps/server/src/orchestration/Layers/OrchestrationEngine.ts`   | Remove `as ProjectId \| ThreadId` casts at lines ~187, ~196, ~285 — use `aggregateRefOf`. Remove `aggregateKind !== "weave"` guards around receipt upsert.     |
+| `apps/server/src/persistence/Layers/OrchestrationEventStore.ts` | Remove `Effect.die` guard on weave events at line 185. Remove `as ProjectId \| ThreadId` cast.                                                                 |
+| `apps/server/src/orchestration/Layers/ProjectionPipeline.ts`    | Add `applyWeaveRunsProjection` projector entry (stub body is acceptable in v0.1 — in-memory projection on `OrchestrationReadModel` is sufficient for Slice 3). |
+| `apps/server/src/orchestration/runtimeLayer.ts`                 | Compose the four new Layers into the orchestration runtime.                                                                                                    |
 
 **Out of scope** (stay untouched per spec):
 
-| Site | Why |
-|---|---|
+| Site                                                                 | Why                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:647` | `"weave" → "default"` interactionMode translation is a permanent architectural bridge. Child threads run in `"default"` mode; the weave outer aggregate never produces provider turns directly. Comment refreshed to drop "Slice 1 stub" label. |
-| `apps/server/src/provider/Layers/CodexSessionRuntime.ts:306` | Same as above; Codex API does not know about `"weave"` mode. Comment refreshed. |
+| `apps/server/src/provider/Layers/CodexSessionRuntime.ts:306`         | Same as above; Codex API does not know about `"weave"` mode. Comment refreshed.                                                                                                                                                                 |
 
 **Out of scope per [spec §3.x "v0.1 does not handle"](../../weave/v0.1-spec.md#32-scheduler-behavior-v01--strictly-sequential):**
 
@@ -59,7 +59,7 @@ Slice 3 is the first slice with side effects. The five deliverable files per [v0
 1. **Pre-flight HEAD check** is mandatory on every task (see protocol below). Red-flag: if the subagent reports a test count mismatch vs. controller expectation, treat it as a chain-integrity signal first, flakiness second.
 
 2. **Plan divergences that Slice 2 locked in** — Slice 3 must honor all of them:
-   - `WeaveOrchestrationEvent = Extract<OrchestrationEvent, { readonly type: \`weave.${string}\` }>` (narrow by type prefix, not `aggregateKind`, which is a shared union across all events).
+   - `WeaveOrchestrationEvent = Extract<OrchestrationEvent, { readonly type: \`weave.${string}\` }>`(narrow by type prefix, not`aggregateKind`, which is a shared union across all events).
    - `createEmptyWeaveProjection` takes a params object (id, projectId, title, vision, ?parentThreadId, ?parentMessageId, ?snapshotContent, status, concurrencyCap, createdAt), not a `WeaveRun`.
    - `PlannedWeaveEvent` uses `DistributiveOmit<T, K>` (local helper) to preserve the discriminated union after `Omit`.
    - Optional payload fields use conditional spread (`...(x !== undefined && { x })`) to satisfy `exactOptionalPropertyTypes`.
@@ -67,9 +67,11 @@ Slice 3 is the first slice with side effects. The five deliverable files per [v0
    - `requireBlueprintVersion` reads `projection.currentBlueprint?.version` (**not** `projection.run.currentBlueprintVersion`). See the followup [rename-run-currentBlueprintVersion.md](../followups/2026-04-24-rename-run-currentBlueprintVersion.md).
 
 3. **Formatter scope.** Do NOT run `bun fmt` globally — it reformats `docs/` markdown files unexpectedly. Always format only the specific files you touched:
+
    ```
    bun fmt path/to/file1.ts path/to/file2.ts
    ```
+
    If a task genuinely needs repo-wide fmt, run it then `git checkout -- docs/` before committing. Do NOT commit doc changes as part of implementation tasks.
 
 4. **Single canonical branch.** All Slice 3 work lands on `nikrabaev/weave`. `main` tracks `origin/main` and is NOT touched. No merge to main at slice close — just tag `weave-v0.1-slice-3`.
@@ -181,6 +183,7 @@ Test deliverables per the spec §3.5 DoD:
 ## Task 1: `AggregateRef` discriminated union + narrow helper
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts` (add `AggregateRef` schema, export)
 - Create: `apps/server/src/orchestration/weaveAggregateRef.ts` (server-side `aggregateRefOf` helper)
 - Create: `apps/server/src/orchestration/weaveAggregateRef.test.ts`
@@ -201,8 +204,8 @@ In `packages/contracts/src/orchestration.ts`, after the existing `OrchestrationA
 // need a narrow typed ref, use `aggregateRefOf(event)` from the server side.
 export const AggregateRef = Schema.Union([
   Schema.Struct({ aggregateKind: Schema.Literal("project"), aggregateId: ProjectId }),
-  Schema.Struct({ aggregateKind: Schema.Literal("thread"),  aggregateId: ThreadId  }),
-  Schema.Struct({ aggregateKind: Schema.Literal("weave"),   aggregateId: WeaveRunId }),
+  Schema.Struct({ aggregateKind: Schema.Literal("thread"), aggregateId: ThreadId }),
+  Schema.Struct({ aggregateKind: Schema.Literal("weave"), aggregateId: WeaveRunId }),
 ]);
 export type AggregateRef = typeof AggregateRef.Type;
 ```
@@ -224,8 +227,12 @@ describe("AggregateRef", () => {
     expect(decoded.aggregateId).toBe(ProjectId.make("project-1"));
   });
 
-  it("decodes a thread ref", () => { /* similar */ });
-  it("decodes a weave ref", () => { /* similar */ });
+  it("decodes a thread ref", () => {
+    /* similar */
+  });
+  it("decodes a weave ref", () => {
+    /* similar */
+  });
 
   it("rejects a mismatched pair (kind=project, id branded as ThreadId)", () => {
     // Runtime Schema.decode should accept any of the three branded strings as
@@ -250,7 +257,13 @@ Document the runtime/type-level distinction explicitly — it matters later.
 Create `apps/server/src/orchestration/weaveAggregateRef.ts`:
 
 ```ts
-import type { AggregateRef, OrchestrationEvent, ProjectId, ThreadId, WeaveRunId } from "@t3tools/contracts";
+import type {
+  AggregateRef,
+  OrchestrationEvent,
+  ProjectId,
+  ThreadId,
+  WeaveRunId,
+} from "@t3tools/contracts";
 
 // aggregateRefOf narrows an OrchestrationEvent's (aggregateKind, aggregateId)
 // plain-union pair into a discriminated AggregateRef. This is the single place
@@ -296,6 +309,7 @@ Expected server test delta: +3 tests (rough; the `aggregateRefOf` tests). Contra
 ## Task 2: Wire `decideWeaveCommand` into the main decider
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/decider.ts` (remove Slice 1 stub at line ~744)
 - Modify: `apps/server/src/orchestration/decider.*.test.ts` — add one test that routes a `weave.create` command through the main decider and asserts it emits `weave.created`. No separate new test file; extend `decider.delete.test.ts`'s sibling pattern or add `decider.weave.test.ts` — match the repo's style.
 
@@ -357,6 +371,7 @@ git commit -m "feat(server): route weave commands through weaveDecider in main d
 ## Task 3: Extend `OrchestrationReadModel` + wire `projectWeaveEvent` into main projector
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts` — add `weaveRuns` to `OrchestrationReadModel` (schema + type).
 - Modify: `packages/contracts/src/orchestration.test.ts` — update `OrchestrationReadModel` decode tests to include `weaveRuns: new Map()` in fixtures.
 - Modify: `apps/server/src/orchestration/projector.ts` — add weave event cases.
@@ -367,6 +382,7 @@ git commit -m "feat(server): route weave commands through weaveDecider in main d
 **Important:** the `OrchestrationReadModel` schema currently uses `Schema.Array(...)` for `projects` and `threads`. For `weaveRuns` — which is keyed by `WeaveRunId` — use `Schema.ReadonlyMap({ key: WeaveRunId, value: WeaveRunProjectionSchema })` if the runtime supports it, OR fall back to an array of records. Inspect the existing test fixtures to see how aggregates are serialized; serialization of `Map` to JSON is lossy, so check whether snapshots are JSON-encoded. If yes, prefer `Schema.Array(WeaveRunEntry)` where `WeaveRunEntry = Schema.Struct({ id: WeaveRunId, projection: WeaveRunProjectionSchema })` and the projector maintains invariant that entries are unique by id.
 
 If `WeaveRunProjection` is NOT currently a contract-level schema (Slice 2 made it a server-internal TypeScript type), you have two options:
+
 1. **Promote the type to a contract schema.** Define `WeaveRunProjectionSchema` in `packages/contracts/src/weave.ts` matching the Slice 2 shape (with `Schema.ReadonlyMap` or array equivalents for the maps/sets). Update Slice 2's `WeaveRunProjection` type to derive from it.
 2. **Keep `weaveRuns` server-internal.** Don't put it in the contracts-level `OrchestrationReadModel`. Instead, extend `OrchestrationReadModel` with an opaque `weaveRuns: Schema.Any` placeholder and handle serialization server-side. This is a shortcut that avoids schema-level typing but preserves flexibility.
 
@@ -395,8 +411,8 @@ export type WeaveRunProjection = WeaveRunProjectionFromContracts;
 // in packages/contracts/src/orchestration.ts, near line 348
 export const OrchestrationReadModel = Schema.Struct({
   snapshotSequence: NonNegativeInt,
-  projects:  Schema.Array(OrchestrationProject),
-  threads:   Schema.Array(OrchestrationThread),
+  projects: Schema.Array(OrchestrationProject),
+  threads: Schema.Array(OrchestrationThread),
   weaveRuns: Schema.ReadonlyMap({ key: WeaveRunId, value: WeaveRunProjectionSchema }),
   updatedAt: IsoDateTime,
 });
@@ -460,6 +476,7 @@ git commit -m "feat(server): project weave events into OrchestrationReadModel.we
 ## Task 4: Persistence — remove `Effect.die` guard + clean up casts
 
 **Files:**
+
 - Modify: `apps/server/src/persistence/Layers/OrchestrationEventStore.ts` (remove lines 185–188 guard; remove `as ProjectId | ThreadId` cast on line 196)
 - Modify: `apps/server/src/orchestration/Layers/OrchestrationEngine.ts` (remove `aggregateKind !== "weave"` guards and casts at lines ~187, ~196, ~285 — all three Slice 1 stubs)
 
@@ -485,6 +502,7 @@ Delete lines 185–188 (the `if (event.aggregateKind === "weave") return Effect.
 Three sites. Pattern for each: replace the `as ProjectId | ThreadId` cast with `aggregateRefOf(savedEvent).aggregateId` (or `aggregateRefOf(lastSavedEvent).aggregateId`). Remove the `if (aggregateRef.aggregateKind !== "weave")` guard — after the receipts schema is widened, weave receipts are valid.
 
 Sites to touch:
+
 - ~line 177–195: `commandReceiptRepository.upsert` on accepted. Remove the `if` guard; use `aggregateRefOf(lastSavedEvent).aggregateId`.
 - ~line 272–292: `commandReceiptRepository.upsert` on rejected. Same pattern, `aggregateRefOf(...)`.
 
@@ -495,6 +513,7 @@ In `apps/server/src/persistence/Layers/OrchestrationEventStore.test.ts` (look fo
 - [ ] **Step 4.5: Regression test — OrchestrationEngine receipts on weave events.**
 
 In `apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts`, add a test that dispatches a `weave.create` command, waits for the resulting event to persist, and queries `commandReceiptRepository` for the receipt. Asserts:
+
 - `status === "accepted"`
 - `aggregateKind === "weave"`
 - `aggregateId` is the `WeaveRunId` from the command
@@ -515,6 +534,7 @@ git commit -m "feat(server): persist weave events and receipts (remove Slice 1 d
 ## Task 5: Update Slice 1 comments on the two permanent translations
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:647` (comment refresh)
 - Modify: `apps/server/src/provider/Layers/CodexSessionRuntime.ts:306` (comment refresh)
 
@@ -556,6 +576,7 @@ Small cleanup commit — no code change, no test change. Keeps the stub inventor
 ## Task 6: `WeaveEngine` — service + Layer + persistence tests
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/Layers/WeaveEngine.ts`
 - Create: `apps/server/src/orchestration/Layers/WeaveEngine.test.ts`
 
@@ -572,10 +593,10 @@ Small cleanup commit — no code change, no test change. Keeps the stub inventor
 ```ts
 // WeaveEngine.ts
 export interface WeaveEngineShape {
-  readonly dispatchWeaveCommand: (command: WeaveCommand) =>
-    Effect.Effect<{ sequence: number }, OrchestrationDispatchError>;
-  readonly getWeaveRun: (runId: WeaveRunId) =>
-    Effect.Effect<WeaveRunProjection | null>;
+  readonly dispatchWeaveCommand: (
+    command: WeaveCommand,
+  ) => Effect.Effect<{ sequence: number }, OrchestrationDispatchError>;
+  readonly getWeaveRun: (runId: WeaveRunId) => Effect.Effect<WeaveRunProjection | null>;
   readonly streamWeaveEvents: Stream.Stream<WeaveOrchestrationEvent>;
 }
 
@@ -630,12 +651,14 @@ git commit -m "feat(server): add WeaveEngine service wrapping OrchestrationEngin
 ## Task 7: `WeavePlanner` — provider turn → Blueprint decode → emit event
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/Layers/WeavePlanner.ts`
 - Create: `apps/server/src/orchestration/Layers/WeavePlanner.test.ts`
 
 **Pre-flight HEAD expectation:** top of chain is Task 6's commit.
 
 **Design:** `WeavePlanner` listens for `weave.created` events on the weave event stream. For each, it:
+
 1. Invokes a `ProviderService` turn with a specialized system prompt (see [spec §3.3](../../weave/v0.1-spec.md#33-planner-behavior)).
 2. Parses the provider's text output as JSON.
 3. Decodes the JSON via `Schema.decode(Blueprint)` from `@t3tools/contracts`.
@@ -741,6 +764,7 @@ git commit -m "feat(server): add WeavePlanner — compile Blueprint from vision 
 ## Task 8: `WeaveScheduler` — pick next ready Node, allocate worktree, dispatch
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/Layers/WeaveScheduler.ts`
 - Create: `apps/server/src/orchestration/Layers/WeaveScheduler.test.ts`
 
@@ -771,7 +795,7 @@ export const WeaveSchedulerLive = Layer.effect(
   Effect.gen(function* () {
     const weaveEngine = yield* WeaveEngineService;
     const orchestrationEngine = yield* OrchestrationEngineService;
-    const git = yield* GitCoreService;  // name may differ; find the actual service tag
+    const git = yield* GitCoreService; // name may differ; find the actual service tag
 
     const worker = yield* makeDrainableWorker(processSchedulerDecision);
 
@@ -894,6 +918,7 @@ git commit -m "feat(server): add WeaveScheduler — sequential dispatch with wor
 ## Task 9: `WeaveContractConformer` — naive verifier on `turn.processing.quiesced`
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/Layers/WeaveContractConformer.ts`
 - Create: `apps/server/src/orchestration/Layers/WeaveContractConformer.test.ts`
 
@@ -913,6 +938,7 @@ Subscribe to `RuntimeReceiptBus.streamEventsForTest` (note: "forTest" in the nam
 - [ ] **Step 9.2: Implement.**
 
 The hard parts:
+
 - Accessing thread metadata to check for `weaveChild`. Inspect how `ProjectionThreadsRepository.getById` returns; likely via a `projectionThreadRepository` service tag.
 - Running an external process. Use `NodeContext`'s `spawn` / `execFile` (inspect the existing codebase for precedent — there's almost certainly a `CommandExecutor` service or similar; if not, use `child_process` with an `Effect.async` wrapper).
 - Ensuring the spawned process is non-blocking: wrap the spawn in an `Effect.async` or `Effect.promise` with a timeout (cap at 120s for v0.1).
@@ -939,6 +965,7 @@ git commit -m "feat(server): add WeaveContractConformer — naive bun-test verif
 ## Task 10: Compose Layers into the runtime
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/runtimeLayer.ts` (add the four new Layers to the composition root)
 
 **Pre-flight HEAD expectation:** top of chain is Task 9's commit.
@@ -982,6 +1009,7 @@ git commit -m "feat(server): compose Weave Layers into the orchestration runtime
 ## Task 11: RPC — three new dispatchable methods
 
 **Files:**
+
 - Modify: `apps/server/src/ws.ts` (or the route file the Explore identified)
 - Possibly modify: `packages/contracts/src/orchestration.ts` (if `ORCHESTRATION_WS_METHODS` needs new entries — probably NOT needed, since all commands flow through the single `dispatchCommand` method)
 - Modify: `apps/web/src/...` client-side — OUT OF SCOPE; Slice 4 handles the web. But verify that the existing web dispatch method can already handle arbitrary `WeaveCommand` types (it likely can since it's a polymorphic `dispatchCommand`).
@@ -1010,6 +1038,7 @@ git commit -m "test(server): verify weave.create / approve / exit dispatch via R
 ## Task 12: End-to-end integration test — 3-Node Blueprint completes
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/weaveIntegration.test.ts`
 
 **Pre-flight HEAD expectation:** top of chain is Task 11's commit.
@@ -1027,7 +1056,10 @@ Stub the conformer's `bun run test` invocation so it always returns exit 0 (no a
 ```ts
 describe("Weave Run end-to-end", () => {
   it("completes a 3-node sequential run from create to complete", async () => {
-    const { run, engine, weaveEngine, dispose } = await bootFullRuntime(stubProvider, stubConformer);
+    const { run, engine, weaveEngine, dispose } = await bootFullRuntime(
+      stubProvider,
+      stubConformer,
+    );
     try {
       const runId = makeWeaveRunId();
 
@@ -1092,7 +1124,6 @@ Per [spec §3.5](../../weave/v0.1-spec.md#35-definition-of-done-3):
 - [ ] **Step 13.4: `bun fmt`** from repo root — if files reformatted, commit as `chore(server): apply oxfmt`. Do NOT commit doc/ reformats — revert them first.
 
 - [ ] **Step 13.5: Spec DoD grep-based verification.**
-
   - All Slice 1 stubs removed except the two permanent translations (sites 4 and 6):
     ```
     grep -nR "Slice 1 stub" apps/server/src/
@@ -1118,6 +1149,7 @@ git log --oneline weave-v0.1-slice-2..HEAD
 ```
 
 Expected (newest first, 12 commits +/- 1 for any fmt fixups):
+
 ```
 [optional] chore(server): apply oxfmt
 test(server): end-to-end Weave Run with 3-node Blueprint via stub provider

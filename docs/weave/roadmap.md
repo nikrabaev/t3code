@@ -36,7 +36,7 @@ Scope:
 - Parallel scheduler — up to `concurrencyCap` concurrent child threads, picked respecting V1.
 - `PreToolUse` hook infrastructure — `.claude/settings.local.json` per worktree + local HTTP validator endpoint + scope-violation telemetry.
 - `MergeDriver` primitive with one implementation (`package.json` union-merge); lockfile regenerated post-merge by the scheduler.
-- Auto-subdivide on Node failure — default policy *"retry once → subdivide once → escalate,"* depth limit 1, logged to the auto-decision surface.
+- Auto-subdivide on Node failure — default policy _"retry once → subdivide once → escalate,"_ depth limit 1, logged to the auto-decision surface.
 - React Flow DAG canvas replacing v0.1's list form.
 - Live concurrency slider (1–8), Pause control, Blueprint version badge.
 
@@ -55,7 +55,7 @@ Scope:
 - Auto-decision log surface.
 - **Redesign** composer mode in the Weave sidebar chat — user-initiated Blueprint Amendments with diff overlay on canvas.
 - Edit Vision mid-run → global pause + localized replan.
-- Node-level pause / resume / restart for user intervene, labeled as *"breaking fresh-context discipline for this Node."*
+- Node-level pause / resume / restart for user intervene, labeled as _"breaking fresh-context discipline for this Node."_
 
 ### v0.4 — polish and observability
 
@@ -85,15 +85,15 @@ Do not touch these unless the user explicitly asks.
 
 From the original concept memo. Captured here as a changelog.
 
-| Question | Resolution |
-|---|---|
-| Scope enforcement mechanism | Claude Code native `PreToolUse` hook + per-worktree `settings.local.json`; belt-and-suspenders via conservative permission mode (Q1) |
-| Concurrent provider sessions | Each Node = one `claude` CLI subprocess via t3code's `ClaudeAdapter`; concurrency is process-level; rate-limited by user's subscription (Q2) |
-| Worktree merge-back | Layer-by-layer merge on the fly into a Run integration branch, deterministic order; merge conflicts = scheduler bug → log and abort (Q3) |
-| Merge-driver scope | One `MergeDriver` primitive; `package.json` implementation; lockfile regenerate is a post-merge action; `.gitignore` append-if-missing as a near-future extension (Q4) |
-| Concurrency-cap changes mid-run | Cap range [1, 8], default 2; in-flight always finish; Pause is a separate control (Q5) |
-| Failure escalation | Auto-subdivide within pre-authorized policy; depth limit 1; logged to auto-decision surface (Q6) |
-| PendingDecision gating scaffold | Scheduler gate live in v0.2; auto-resolver + surface + UX all deferred to v0.3 (Q7) |
+| Question                        | Resolution                                                                                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope enforcement mechanism     | Claude Code native `PreToolUse` hook + per-worktree `settings.local.json`; belt-and-suspenders via conservative permission mode (Q1)                                   |
+| Concurrent provider sessions    | Each Node = one `claude` CLI subprocess via t3code's `ClaudeAdapter`; concurrency is process-level; rate-limited by user's subscription (Q2)                           |
+| Worktree merge-back             | Layer-by-layer merge on the fly into a Run integration branch, deterministic order; merge conflicts = scheduler bug → log and abort (Q3)                               |
+| Merge-driver scope              | One `MergeDriver` primitive; `package.json` implementation; lockfile regenerate is a post-merge action; `.gitignore` append-if-missing as a near-future extension (Q4) |
+| Concurrency-cap changes mid-run | Cap range [1, 8], default 2; in-flight always finish; Pause is a separate control (Q5)                                                                                 |
+| Failure escalation              | Auto-subdivide within pre-authorized policy; depth limit 1; logged to auto-decision surface (Q6)                                                                       |
+| PendingDecision gating scaffold | Scheduler gate live in v0.2; auto-resolver + surface + UX all deferred to v0.3 (Q7)                                                                                    |
 
 ## Still open
 
@@ -104,9 +104,9 @@ From the original concept memo. Captured here as a changelog.
 
 Named in the concept memo as F1–F3. Each is where v0 tooling must compensate.
 
-- **F1. Hoisting is LLM taste.** The planner is responsible for V3 (Decision closure) and can miss silent semantic conflicts (two siblings pick different state libraries because the ancestor Contract said "use a state library" instead of naming one). *Mitigation:* planner self-critique pass (v0.3+); project style guide baked into every Blueprint; rejection of under-specified Contracts at compile time.
-- **F2. Contracts change under first contact.** Implementation reveals ancestor mistakes. *Mitigation:* Contract Amendment protocol via Redesign mode (v0.3); localized replan, not full replan; preserve unaffected subtrees.
-- **F3. Verifiers are imperfect.** Green does not guarantee correct. *Mitigation:* keep Phases short; Phase smoke tests run end-to-end (v0.3); humans are the backstop at Phase gates.
+- **F1. Hoisting is LLM taste.** The planner is responsible for V3 (Decision closure) and can miss silent semantic conflicts (two siblings pick different state libraries because the ancestor Contract said "use a state library" instead of naming one). _Mitigation:_ planner self-critique pass (v0.3+); project style guide baked into every Blueprint; rejection of under-specified Contracts at compile time.
+- **F2. Contracts change under first contact.** Implementation reveals ancestor mistakes. _Mitigation:_ Contract Amendment protocol via Redesign mode (v0.3); localized replan, not full replan; preserve unaffected subtrees.
+- **F3. Verifiers are imperfect.** Green does not guarantee correct. _Mitigation:_ keep Phases short; Phase smoke tests run end-to-end (v0.3); humans are the backstop at Phase gates.
 
 When a design decision trades off against one of these, say which one and why.
 

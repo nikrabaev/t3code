@@ -48,7 +48,7 @@ GATE 2 — user formally approves Phase 2's plan; Phase 1's outcome is
 … until the last Phase's last Task verifies → run complete.
 ```
 
-The gate is **one per Phase boundary**, and fires *after* the next Phase's Planning Node has materialized. The user is always reviewing a real plan, never an empty placeholder.
+The gate is **one per Phase boundary**, and fires _after_ the next Phase's Planning Node has materialized. The user is always reviewing a real plan, never an empty placeholder.
 
 ## Domain model changes
 
@@ -60,8 +60,8 @@ export const WeaveNodeKind = Schema.Literals([
   "scaffold",
   "contract",
   "utility",
-  "planning",   // NEW — emits Blueprint extensions, not files
-])
+  "planning", // NEW — emits Blueprint extensions, not files
+]);
 ```
 
 A Planning Node's "output" is graph, not code. It runs in a worktree (uniform dispatch protocol) but its result is captured from the agent's structured JSON output, not from a file diff. The worktree is discarded after dispatch.
@@ -75,8 +75,8 @@ export const WeaveBlueprintCompileReason = Schema.Literals([
   "initial",
   "amendment",
   "redesign",
-  "phase-planning",   // NEW — a Planning Node emitted a sub-DAG
-])
+  "phase-planning", // NEW — a Planning Node emitted a sub-DAG
+]);
 ```
 
 Every Planning Node emission produces a new `BlueprintVersion`. The compile reason names what triggered it.
@@ -90,7 +90,7 @@ export const WeaveBlueprintExtendedPayload = Schema.Struct({
   plannerNodeId: WeaveNodeId,
   addedNodeIds: Schema.Array(WeaveNodeId),
   occurredAt: IsoDateTime,
-})
+});
 ```
 
 Captures the delta caused by a single Planning Node's emission. The full new Blueprint also rides on the existing `WeaveBlueprintCompiledPayload` (so projections never reconstruct from deltas alone).
@@ -111,16 +111,16 @@ Counts: meta-plan = depth 0; a Phase Planning Node it emits = depth 1; a mid-Pha
 
 ## Component changes
 
-| Component | Change |
-|---|---|
-| `WeavePlanner` | Split into `MetaPlanner` (Vision → Phase list with Planning Nodes only) and `PhasePlanner` (the per-Node planner agent invoked when a Planning Node dispatches). Both reuse the existing `ProviderService` path. |
-| `plannerPrompt.ts` | Two new prompt builders: `buildMetaPlannerPrompt` and `buildPhasePlannerPrompt`. Each emits a constrained JSON shape. |
-| `WeaveDecider` | New transitions for `weave.blueprint.extend` (a Planning Node's emission becomes a new Blueprint version). Existing transitions preserved. |
-| `WeaveProjector` | Append-only Blueprint version handling; surface `pendingPlanningNodes` so the scheduler can pick them up. |
-| `WeaveScheduler` | Dispatch Planning Nodes the same way it dispatches Tasks. Recognize "Planning Node verified → next Phase Planning Node ready" transitions. |
-| `WeaveContractConformer` | Special-case `kind === "planning"`: verifier is "schema-validate the agent's emitted JSON against the Blueprint-extension schema." No commands run, no worktree diff inspection. |
-| `WeaveDispatcher` | Capture structured JSON output from Planning Node child threads; route it into the extend-Blueprint flow. |
-| Web | `WeaveBlueprintList` renders Planning Nodes inline with Tasks (kind badge `planning`). Approve flow surfaces at each Phase boundary, not only at intake. |
+| Component                | Change                                                                                                                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WeavePlanner`           | Split into `MetaPlanner` (Vision → Phase list with Planning Nodes only) and `PhasePlanner` (the per-Node planner agent invoked when a Planning Node dispatches). Both reuse the existing `ProviderService` path. |
+| `plannerPrompt.ts`       | Two new prompt builders: `buildMetaPlannerPrompt` and `buildPhasePlannerPrompt`. Each emits a constrained JSON shape.                                                                                            |
+| `WeaveDecider`           | New transitions for `weave.blueprint.extend` (a Planning Node's emission becomes a new Blueprint version). Existing transitions preserved.                                                                       |
+| `WeaveProjector`         | Append-only Blueprint version handling; surface `pendingPlanningNodes` so the scheduler can pick them up.                                                                                                        |
+| `WeaveScheduler`         | Dispatch Planning Nodes the same way it dispatches Tasks. Recognize "Planning Node verified → next Phase Planning Node ready" transitions.                                                                       |
+| `WeaveContractConformer` | Special-case `kind === "planning"`: verifier is "schema-validate the agent's emitted JSON against the Blueprint-extension schema." No commands run, no worktree diff inspection.                                 |
+| `WeaveDispatcher`        | Capture structured JSON output from Planning Node child threads; route it into the extend-Blueprint flow.                                                                                                        |
+| Web                      | `WeaveBlueprintList` renders Planning Nodes inline with Tasks (kind badge `planning`). Approve flow surfaces at each Phase boundary, not only at intake.                                                         |
 
 The `WeaveContractConformer` change is the smallest viable cut: it doesn't need the kind-stratified verifier from the parked Phase A — it just needs to know that `planning` Nodes verify by schema, not by command.
 
@@ -144,7 +144,7 @@ A typical Run, Phase by Phase:
 
 ## Approval semantics
 
-**One gate per Phase boundary, fired post-Planning-Node-emission.** The gate is the existing `WeaveBlueprintApproveCommand`, applied to the *post-emission* version. When the user approves version `n`, the Phase whose Planning Node produced version `n` becomes runnable.
+**One gate per Phase boundary, fired post-Planning-Node-emission.** The gate is the existing `WeaveBlueprintApproveCommand`, applied to the _post-emission_ version. When the user approves version `n`, the Phase whose Planning Node produced version `n` becomes runnable.
 
 Mid-Phase Planning Node emissions auto-promote — they bump `BlueprintVersion` and append Nodes, but the run keeps executing without a user gate. This honors the "Phase-only gates" decision: autonomy within a Phase even when the DAG mutates.
 
@@ -156,13 +156,13 @@ Replays the meta-planner with the updated Vision + completed Phase outputs prese
 
 ## Failure handling
 
-| Failure | Response |
-|---|---|
-| Planning Node emits invalid JSON / wrong schema | Conformer marks Node `failed`. Standard ladder applies: retry once with the validation error fed back into the prompt; on second failure, escalate to user. |
-| Planning Node tries to emit beyond `planningDepthCap` | Conformer marks Node `failed` with a runaway-guard reason. User-visible: "Planning depth exceeded — reduce uncertainty or increase cap." |
-| Meta-planner emits zero Phases | Hard error at intake, treated like an invalid plan today. |
-| Phase Planning Node emits zero Tasks | Allowed — that Phase becomes a no-op once approved. (Useful for Phases the meta-planner outlined but the Phase Planner concludes are unnecessary.) |
-| User rejects a Phase's emitted plan | Same options as today's intake-time blueprint review: Edit Vision, Re-plan Phase, Abort. **Re-plan Phase** re-dispatches the Planning Node with a fresh worktree and the user's rejection rationale fed in. |
+| Failure                                               | Response                                                                                                                                                                                                    |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Planning Node emits invalid JSON / wrong schema       | Conformer marks Node `failed`. Standard ladder applies: retry once with the validation error fed back into the prompt; on second failure, escalate to user.                                                 |
+| Planning Node tries to emit beyond `planningDepthCap` | Conformer marks Node `failed` with a runaway-guard reason. User-visible: "Planning depth exceeded — reduce uncertainty or increase cap."                                                                    |
+| Meta-planner emits zero Phases                        | Hard error at intake, treated like an invalid plan today.                                                                                                                                                   |
+| Phase Planning Node emits zero Tasks                  | Allowed — that Phase becomes a no-op once approved. (Useful for Phases the meta-planner outlined but the Phase Planner concludes are unnecessary.)                                                          |
+| User rejects a Phase's emitted plan                   | Same options as today's intake-time blueprint review: Edit Vision, Re-plan Phase, Abort. **Re-plan Phase** re-dispatches the Planning Node with a fresh worktree and the user's rejection rationale fed in. |
 
 ## Out of scope
 

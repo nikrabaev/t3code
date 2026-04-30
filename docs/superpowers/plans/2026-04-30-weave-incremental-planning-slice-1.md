@@ -11,11 +11,13 @@
 **Tech Stack:** Effect 4 beta (`Schema.Literals`, `Schema.Struct`, `Schema.Union`), `@effect/vitest` (`it.effect`), `node:assert/strict`.
 
 **Out of scope for Slice 1:**
+
 - Any planner / decider / projector / conformer / scheduler change. New schemas are unused at runtime end of this slice.
 - Web changes (new types appear via the existing contracts re-export but are not yet rendered).
 - Decoder / validator for the phase-planner agent's emitted JSON (Slice 3).
 
 **Definition of done:**
+
 - All new schemas decode/encode correctly with positive and negative tests.
 - `bun typecheck`, `bun run test`, `bun lint`, `bun fmt` all pass.
 - No existing test regresses.
@@ -25,12 +27,12 @@
 
 ## File structure
 
-| File | Change |
-|---|---|
-| `packages/contracts/src/weave.ts` | Extend `WeaveNodeKind`, extend `WeaveBlueprintCompileReason`, add optional `planningDepthCap` to `WeaveRun`, add `WeaveBlueprintExtendedPayload`, add `WeaveBlueprintExtendCommand`, extend `WeaveInternalCommand` union |
-| `packages/contracts/src/weave.test.ts` | New tests for every schema change above |
-| `packages/contracts/src/orchestration.ts` | Add `"weave.blueprint-extended"` to `OrchestrationEventType` literal union; add corresponding variant to `OrchestrationEvent` union; import `WeaveBlueprintExtendedPayload` |
-| `packages/contracts/src/orchestration.test.ts` | New test asserting the new event variant decodes |
+| File                                           | Change                                                                                                                                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/contracts/src/weave.ts`              | Extend `WeaveNodeKind`, extend `WeaveBlueprintCompileReason`, add optional `planningDepthCap` to `WeaveRun`, add `WeaveBlueprintExtendedPayload`, add `WeaveBlueprintExtendCommand`, extend `WeaveInternalCommand` union |
+| `packages/contracts/src/weave.test.ts`         | New tests for every schema change above                                                                                                                                                                                  |
+| `packages/contracts/src/orchestration.ts`      | Add `"weave.blueprint-extended"` to `OrchestrationEventType` literal union; add corresponding variant to `OrchestrationEvent` union; import `WeaveBlueprintExtendedPayload`                                              |
+| `packages/contracts/src/orchestration.test.ts` | New test asserting the new event variant decodes                                                                                                                                                                         |
 
 `weave.ts` and `weave.test.ts` carry most of the change. `orchestration.ts` only adds the event-union plumbing so the new payload is reachable through the existing `OrchestrationEvent` union.
 
@@ -39,6 +41,7 @@
 ## Task 1: Extend `WeaveNodeKind` with `"planning"`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts:54-60`
 - Test: `packages/contracts/src/weave.test.ts:94-100`
 
@@ -105,6 +108,7 @@ git commit -m "feat(weave): add planning to WeaveNodeKind"
 ## Task 2: Extend `WeaveBlueprintCompileReason` with `"phase-planning"`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts` (the line declaring `WeaveBlueprintCompileReason`)
 - Test: `packages/contracts/src/weave.test.ts` (new test)
 
@@ -176,6 +180,7 @@ git commit -m "feat(weave): add phase-planning to WeaveBlueprintCompileReason"
 ## Task 3: Add `planningDepthCap` to `WeaveRun`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts` (the `WeaveRun` struct)
 - Test: `packages/contracts/src/weave.test.ts` (new tests)
 
@@ -289,6 +294,7 @@ git commit -m "feat(weave): add optional planningDepthCap to WeaveRun"
 ## Task 4: Add `WeaveBlueprintExtendedPayload`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts` (new schema)
 - Test: `packages/contracts/src/weave.test.ts` (new tests)
 
@@ -299,7 +305,9 @@ Append to `packages/contracts/src/weave.test.ts`:
 ```ts
 import { WeaveBlueprintExtendedPayload } from "./weave.ts";
 
-const decodeWeaveBlueprintExtendedPayload = Schema.decodeUnknownEffect(WeaveBlueprintExtendedPayload);
+const decodeWeaveBlueprintExtendedPayload = Schema.decodeUnknownEffect(
+  WeaveBlueprintExtendedPayload,
+);
 
 it.effect("round-trips a WeaveBlueprintExtendedPayload", () =>
   Effect.gen(function* () {
@@ -377,6 +385,7 @@ git commit -m "feat(weave): add WeaveBlueprintExtendedPayload schema"
 ## Task 5: Add `WeaveBlueprintExtendCommand` and extend `WeaveInternalCommand`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts` (new command + union extension)
 - Test: `packages/contracts/src/weave.test.ts` (new tests)
 
@@ -477,6 +486,7 @@ git commit -m "feat(weave): add WeaveBlueprintExtendCommand"
 ## Task 6: Wire `weave.blueprint-extended` into `OrchestrationEvent`
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts`
 - Test: `packages/contracts/src/orchestration.test.ts` (new test)
 
@@ -598,6 +608,7 @@ git commit -m "feat(weave): wire weave.blueprint-extended into OrchestrationEven
 After Task 6, the new schemas exist and decode. The downstream apps/packages that import from `@t3tools/contracts` may need a sanity check — particularly if any TS file does an exhaustive `switch` on `WeaveNodeKind` or on event types.
 
 **Files:**
+
 - No file changes expected. This task only verifies and (if needed) adds non-exhaustive guards.
 
 - [ ] **Step 1: Run repo-wide typecheck**

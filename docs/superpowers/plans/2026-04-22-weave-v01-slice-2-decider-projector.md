@@ -16,14 +16,14 @@
 
 Slice 1 left six stubs in `apps/server/src` to make `bun typecheck` pass after the contracts extension. Slice 2 is **pure** ([spec §2.7](../../weave/v0.1-spec.md#27-definition-of-done)) and **does not wire anything into the main event loop** — so none of these stubs are removed by Slice 2. They're listed here with their Slice-3 disposition so the plan is explicit.
 
-| Stub | File:line | Why Slice 2 does NOT touch it | When it gets replaced |
-|---|---|---|---|
-| Decider exhaustiveness block | `apps/server/src/orchestration/decider.ts:744` | Removing this requires giving the main decider access to `WeaveRunProjection` state, which means extending `OrchestrationReadModel` (a contracts change). Slice 2 stays pure by keeping the stub and introducing the new decider as a standalone pure function that Slice 3 will call via the engine. | **Slice 3** — `WeaveEngine` composes `decideWeaveCommand` into the command flow. |
-| `commandToAggregateRef` weave branch | `apps/server/src/orchestration/Layers/OrchestrationEngine.ts:66` | Already correct Slice-1-minimum logic (maps weave commands to `{ aggregateKind: "weave", aggregateId: command.weaveRunId }`). Comment labels it "Slice 1 stub" because the discriminated `(aggregateKind, aggregateId)` correlation type is deferred. | **Slice 3** — when the correlation type lands. |
-| `commandReceiptRepository.upsert` guard | `apps/server/src/orchestration/Layers/OrchestrationEngine.ts:177,274` | Uses `as ProjectId \| ThreadId` casts because `aggregateId` is a plain union. Correlation-type debt; carry-over #3 keeps this deferred. | **Slice 3** — new correlation type + DB schema update. |
-| `"weave" → "default"` interactionMode translation | `apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:647` | Weave runs child threads in `"default"` mode; the outer weave aggregate doesn't produce provider turns. Real wiring requires the scheduler (Slice 3). | **Slice 3** — `WeaveScheduler` creates child threads explicitly. |
-| `OrchestrationEventStore.append` die for weave | `apps/server/src/persistence/Layers/OrchestrationEventStore.ts:185` | Persistence-layer concern. Slice 2 is pure — no events are persisted here. | **Slice 3** — DB schema accepts weave aggregates. |
-| `"weave" → "default"` Codex mode translation | `apps/server/src/provider/Layers/CodexSessionRuntime.ts:306` | Codex API doesn't know about Weave. Translation is permanent architectural behavior, not a stub. The "Slice 1 stub" label on the comment is pessimistic; it may simply stay. | **Slice 3** — reassess; likely keep. |
+| Stub                                              | File:line                                                             | Why Slice 2 does NOT touch it                                                                                                                                                                                                                                                                         | When it gets replaced                                                            |
+| ------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Decider exhaustiveness block                      | `apps/server/src/orchestration/decider.ts:744`                        | Removing this requires giving the main decider access to `WeaveRunProjection` state, which means extending `OrchestrationReadModel` (a contracts change). Slice 2 stays pure by keeping the stub and introducing the new decider as a standalone pure function that Slice 3 will call via the engine. | **Slice 3** — `WeaveEngine` composes `decideWeaveCommand` into the command flow. |
+| `commandToAggregateRef` weave branch              | `apps/server/src/orchestration/Layers/OrchestrationEngine.ts:66`      | Already correct Slice-1-minimum logic (maps weave commands to `{ aggregateKind: "weave", aggregateId: command.weaveRunId }`). Comment labels it "Slice 1 stub" because the discriminated `(aggregateKind, aggregateId)` correlation type is deferred.                                                 | **Slice 3** — when the correlation type lands.                                   |
+| `commandReceiptRepository.upsert` guard           | `apps/server/src/orchestration/Layers/OrchestrationEngine.ts:177,274` | Uses `as ProjectId \| ThreadId` casts because `aggregateId` is a plain union. Correlation-type debt; carry-over #3 keeps this deferred.                                                                                                                                                               | **Slice 3** — new correlation type + DB schema update.                           |
+| `"weave" → "default"` interactionMode translation | `apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:647`  | Weave runs child threads in `"default"` mode; the outer weave aggregate doesn't produce provider turns. Real wiring requires the scheduler (Slice 3).                                                                                                                                                 | **Slice 3** — `WeaveScheduler` creates child threads explicitly.                 |
+| `OrchestrationEventStore.append` die for weave    | `apps/server/src/persistence/Layers/OrchestrationEventStore.ts:185`   | Persistence-layer concern. Slice 2 is pure — no events are persisted here.                                                                                                                                                                                                                            | **Slice 3** — DB schema accepts weave aggregates.                                |
+| `"weave" → "default"` Codex mode translation      | `apps/server/src/provider/Layers/CodexSessionRuntime.ts:306`          | Codex API doesn't know about Weave. Translation is permanent architectural behavior, not a stub. The "Slice 1 stub" label on the comment is pessimistic; it may simply stay.                                                                                                                          | **Slice 3** — reassess; likely keep.                                             |
 
 **Carry-over from user:** `(aggregateKind, aggregateId)` correlation debt stays deferred to Slice 3. Slice 2 is pure functions; the current plain-union `aggregateId` is sufficient at that layer — pure functions do not encounter `OrchestrationEvent`'s envelope narrowing because they operate on `WeaveRunProjection`, not `OrchestrationReadModel`.
 
@@ -99,14 +99,14 @@ At Slice 2 close, tag the final commit `weave-v0.1-slice-2` on `nikrabaev/weave`
 
 ## File structure
 
-| File | Change | Responsibility |
-|---|---|---|
-| `apps/server/src/orchestration/weaveProjector.ts` | **NEW** | Defines `WeaveRunProjection` type, `createEmptyWeaveProjection(run: WeaveRun)`, `projectWeaveEvent(state \| null, event) => state`. Pure. |
-| `apps/server/src/orchestration/weaveProjector.test.ts` | **NEW** | Per-event test cases (9 events × happy-path + idempotency check). |
-| `apps/server/src/orchestration/weaveCommandInvariants.ts` | **NEW** | Pure helper functions: `requireRunAbsent`, `requireRun`, `requireRunNotTerminal`, `requireStatus`, `requireNode`, `requireNodeStatus`, `requireBlueprintVersion`, `requireOpenDecision`, `requirePhasePending`. |
-| `apps/server/src/orchestration/weaveCommandInvariants.test.ts` | **NEW** | Per-helper test cases. |
-| `apps/server/src/orchestration/weaveDecider.ts` | **NEW** | `decideWeaveCommand({ projection, command })` — switch on command type, calls invariants, emits `PlannedWeaveEvent[]`. |
-| `apps/server/src/orchestration/weaveDecider.test.ts` | **NEW** | Per-command cases: happy path + ≥1 invariant violation per command. |
+| File                                                           | Change  | Responsibility                                                                                                                                                                                                  |
+| -------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/src/orchestration/weaveProjector.ts`              | **NEW** | Defines `WeaveRunProjection` type, `createEmptyWeaveProjection(run: WeaveRun)`, `projectWeaveEvent(state \| null, event) => state`. Pure.                                                                       |
+| `apps/server/src/orchestration/weaveProjector.test.ts`         | **NEW** | Per-event test cases (9 events × happy-path + idempotency check).                                                                                                                                               |
+| `apps/server/src/orchestration/weaveCommandInvariants.ts`      | **NEW** | Pure helper functions: `requireRunAbsent`, `requireRun`, `requireRunNotTerminal`, `requireStatus`, `requireNode`, `requireNodeStatus`, `requireBlueprintVersion`, `requireOpenDecision`, `requirePhasePending`. |
+| `apps/server/src/orchestration/weaveCommandInvariants.test.ts` | **NEW** | Per-helper test cases.                                                                                                                                                                                          |
+| `apps/server/src/orchestration/weaveDecider.ts`                | **NEW** | `decideWeaveCommand({ projection, command })` — switch on command type, calls invariants, emits `PlannedWeaveEvent[]`.                                                                                          |
+| `apps/server/src/orchestration/weaveDecider.test.ts`           | **NEW** | Per-command cases: happy path + ≥1 invariant violation per command.                                                                                                                                             |
 
 **No existing files are modified** in Slice 2. `decider.ts`, `projector.ts`, `commandInvariants.ts`, and all layers under `Layers/` remain unchanged. This is the spec-mandated scope ([spec §2.1](../../weave/v0.1-spec.md#21-files)).
 
@@ -126,10 +126,13 @@ export type WeaveRunProjection = {
     readonly at: IsoDateTime;
   }>;
   readonly phaseApprovals: ReadonlyMap<WeavePhaseId, WeavePhaseApproval>;
-  readonly childThreads: ReadonlyMap<WeaveNodeId, {
-    readonly threadId: ThreadId;
-    readonly worktreePath: string;
-  }>;
+  readonly childThreads: ReadonlyMap<
+    WeaveNodeId,
+    {
+      readonly threadId: ThreadId;
+      readonly worktreePath: string;
+    }
+  >;
 };
 ```
 
@@ -154,6 +157,7 @@ Slice 2 operates on `WeaveRunProjection` (one per Weave Run, keyed by `WeaveRunI
 ## Task 1: Infrastructure — types, fixtures, invariants helpers, test scaffolding
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/weaveProjector.ts` (skeleton — type + factory only, no event cases yet)
 - Create: `apps/server/src/orchestration/weaveCommandInvariants.ts` (all helper functions; fully implemented in this task since they're consumed by every subsequent decider task)
 - Create: `apps/server/src/orchestration/weaveCommandInvariants.test.ts` (all helper tests)
@@ -195,10 +199,13 @@ export type WeaveRunProjection = {
     readonly at: IsoDateTime;
   }>;
   readonly phaseApprovals: ReadonlyMap<WeavePhaseId, WeavePhaseApproval>;
-  readonly childThreads: ReadonlyMap<WeaveNodeId, {
-    readonly threadId: ThreadId;
-    readonly worktreePath: string;
-  }>;
+  readonly childThreads: ReadonlyMap<
+    WeaveNodeId,
+    {
+      readonly threadId: ThreadId;
+      readonly worktreePath: string;
+    }
+  >;
 };
 
 // Narrowed weave-only event variants (no sequence field; projector takes a
@@ -650,6 +657,7 @@ git commit -m "feat(server): add WeaveRunProjection type and weave invariant hel
 ## Task 2: Projector case — `weave.created`
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts`
 - Create: `apps/server/src/orchestration/weaveProjector.test.ts`
 
@@ -662,13 +670,7 @@ Logic: `weave.created` materializes a new `WeaveRunProjection` via `createEmptyW
 Create `apps/server/src/orchestration/weaveProjector.test.ts`:
 
 ```ts
-import {
-  CommandId,
-  EventId,
-  OrchestrationEvent,
-  ProjectId,
-  WeaveRunId,
-} from "@t3tools/contracts";
+import { CommandId, EventId, OrchestrationEvent, ProjectId, WeaveRunId } from "@t3tools/contracts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -758,9 +760,9 @@ describe("projectWeaveEvent — weave.created", () => {
       occurredAt: now,
     });
     const existing = await Effect.runPromise(projectWeaveEvent(null, event));
-    await expect(
-      Effect.runPromise(projectWeaveEvent(existing, event)),
-    ).rejects.toThrow("already exists");
+    await expect(Effect.runPromise(projectWeaveEvent(existing, event))).rejects.toThrow(
+      "already exists",
+    );
   });
 });
 ```
@@ -849,6 +851,7 @@ git commit -m "feat(server): project weave.created into a new WeaveRunProjection
 ## Task 3: Projector cases — `weave.blueprint-compiled` and `weave.blueprint-approved`
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts`
 - Modify: `apps/server/src/orchestration/weaveProjector.test.ts`
 
@@ -1134,6 +1137,7 @@ git commit -m "feat(server): project weave.blueprint-compiled and -approved"
 ## Task 4: Projector cases — node lifecycle events
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts`
 - Modify: `apps/server/src/orchestration/weaveProjector.test.ts`
 
@@ -1348,6 +1352,7 @@ git commit -m "feat(server): project weave node lifecycle (dispatched/verified/f
 ## Task 5: Projector cases — decision, phase, exit (final three events)
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts`
 - Modify: `apps/server/src/orchestration/weaveProjector.test.ts`
 
@@ -1370,7 +1375,7 @@ Append to `weaveProjector.test.ts`. Full tests omitted for brevity in the plan; 
 - `exited` complete → `run.status === "complete"`.
 - `exited` aborted → `run.status === "aborted"`.
 
-Spell out each test in the usual `it("…", async () => { … })` form with `await Effect.runPromise(...)`; the test file conventions are established in Tasks 2–4 and must not be abbreviated in actual implementation code. The plan budget here is the test *names* and the *property assertions*; the implementer fills the fixture-building boilerplate following Task 4's `runningProjectionWithNode` helper.
+Spell out each test in the usual `it("…", async () => { … })` form with `await Effect.runPromise(...)`; the test file conventions are established in Tasks 2–4 and must not be abbreviated in actual implementation code. The plan budget here is the test _names_ and the _property assertions_; the implementer fills the fixture-building boilerplate following Task 4's `runningProjectionWithNode` helper.
 
 - [ ] **Step 5.2: Run to verify failures**
 
@@ -1463,6 +1468,7 @@ git commit -m "feat(server): project weave decision-resolved, phase-approved, ex
 ## Task 6: Decider case — `weave.create`
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/weaveDecider.ts`
 - Create: `apps/server/src/orchestration/weaveDecider.test.ts`
 
@@ -1473,17 +1479,11 @@ Logic: `weave.create` is valid when `projection === null` (use `requireRunAbsent
 - [ ] **Step 6.1: Create `weaveDecider.ts` with the full scaffolding (switch stub + `weave.create` case)**
 
 ```ts
-import type {
-  OrchestrationEvent,
-  WeaveCommand,
-  WeaveRunId,
-} from "@t3tools/contracts";
+import type { OrchestrationEvent, WeaveCommand, WeaveRunId } from "@t3tools/contracts";
 import { Effect } from "effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
-import {
-  requireRunAbsent,
-} from "./weaveCommandInvariants.ts";
+import { requireRunAbsent } from "./weaveCommandInvariants.ts";
 import type { WeaveRunProjection } from "./weaveProjector.ts";
 
 // PlannedWeaveEvent: a weave-aggregate OrchestrationEvent minus `sequence`
@@ -1565,11 +1565,7 @@ export function decideWeaveCommand(input: {
 Create `apps/server/src/orchestration/weaveDecider.test.ts`:
 
 ```ts
-import {
-  CommandId,
-  ProjectId,
-  WeaveRunId,
-} from "@t3tools/contracts";
+import { CommandId, ProjectId, WeaveRunId } from "@t3tools/contracts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -1654,6 +1650,7 @@ git commit -m "feat(server): decide weave.create command"
 ## Task 7: Decider cases — `weave.blueprint.compile`, `weave.blueprint.approve`, `weave.exit`
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveDecider.ts`
 - Modify: `apps/server/src/orchestration/weaveDecider.test.ts`
 
@@ -1690,7 +1687,10 @@ describe("decideWeaveCommand — weave.blueprint.compile", () => {
   });
 
   it("rejects when run is complete", async () => {
-    const p = { ...emptyProjection(), run: { ...emptyProjection().run, status: "complete" as const } };
+    const p = {
+      ...emptyProjection(),
+      run: { ...emptyProjection().run, status: "complete" as const },
+    };
     await expect(
       Effect.runPromise(
         decideWeaveCommand({
@@ -1765,7 +1765,7 @@ describe("decideWeaveCommand — weave.blueprint.approve", () => {
     await expect(
       Effect.runPromise(
         decideWeaveCommand({
-          projection: emptyProjection(),  // status=draft
+          projection: emptyProjection(), // status=draft
           command: {
             type: "weave.blueprint.approve",
             commandId: CommandId.make("cmd-a"),
@@ -1802,7 +1802,10 @@ describe("decideWeaveCommand — weave.exit", () => {
   });
 
   it("rejects when run already complete", async () => {
-    const p = { ...emptyProjection(), run: { ...emptyProjection().run, status: "complete" as const } };
+    const p = {
+      ...emptyProjection(),
+      run: { ...emptyProjection().run, status: "complete" as const },
+    };
     await expect(
       Effect.runPromise(
         decideWeaveCommand({
@@ -1907,6 +1910,7 @@ git commit -m "feat(server): decide weave.blueprint.compile, weave.blueprint.app
 ## Task 8: Decider cases — node lifecycle (`dispatch`, `verified`, `failed`)
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveDecider.ts`
 - Modify: `apps/server/src/orchestration/weaveDecider.test.ts`
 
@@ -1929,11 +1933,12 @@ Given the multi-event nature of `weave.node.verified`, this is the most complex 
 - [ ] **Step 8.1: Write failing tests**
 
 Cover per case:
+
 - `dispatch`: emits `weave.node-dispatched` when ancestors verified; rejects when run not running, when node not ready, when ancestor unverified.
 - `verified`: emits `weave.node-verified` (single event) when other nodes in phase still pending; emits 2 events (`weave.node-verified` + `weave.phase-approved`) when this verification completes the phase but not the blueprint; emits 3 events when it completes the final phase (+ `weave.exited` with `reason: "complete"`); rejects when `verifierOutcome` is empty; rejects when node not running.
 - `failed`: emits `weave.node-failed`; rejects on bad node status.
 
-Because these tests are nontrivial, spell out all of them in the implementation (the plan lists test *names* and fixture patterns; the implementer fills in the bodies following Tasks 6/7's style). Minimum test count: **10** (3 for dispatch, 5 for verified covering the three emission shapes + 2 rejection cases, 2 for failed).
+Because these tests are nontrivial, spell out all of them in the implementation (the plan lists test _names_ and fixture patterns; the implementer fills in the bodies following Tasks 6/7's style). Minimum test count: **10** (3 for dispatch, 5 for verified covering the three emission shapes + 2 rejection cases, 2 for failed).
 
 - [ ] **Step 8.2: Run to verify failures**
 
@@ -2127,6 +2132,7 @@ git commit -m "feat(server): decide weave node lifecycle with auto phase+run clo
 ## Task 9: Decider cases — `weave.decision.resolve`, `weave.phase.approve`
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveDecider.ts`
 - Modify: `apps/server/src/orchestration/weaveDecider.test.ts`
 
@@ -2140,6 +2146,7 @@ Per spec §2.3:
 - [ ] **Step 9.1: Write failing tests**
 
 Cover per case:
+
 - `decision.resolve`: emits event; rejects when decision not open.
 - `phase.approve`: emits single event on non-last phase; emits 2 events (`weave.phase-approved` + `weave.exited`) when last phase + `"approved"`; emits 1 event (no auto-exit) on last phase + `"rejected"`; rejects when phase not pending.
 
@@ -2256,6 +2263,7 @@ git commit -m "feat(server): decide weave.decision.resolve and weave.phase.appro
 ## Task 10: Integration test — decider + projector roundtrip
 
 **Files:**
+
 - Create: `apps/server/src/orchestration/weaveRoundtrip.test.ts`
 
 **Pre-flight HEAD expectation:** top three commits Task 9 → Task 8 → Task 7.
@@ -2388,9 +2396,7 @@ describe("weave decider+projector roundtrip", () => {
         },
       },
     };
-    const afterCompile = await Effect.runPromise(
-      projectWeaveEvent(s1.projection, compiledEvent),
-    );
+    const afterCompile = await Effect.runPromise(projectWeaveEvent(s1.projection, compiledEvent));
     expect(afterCompile.run.status).toBe("reviewing");
 
     // 3. approve blueprint
@@ -2488,6 +2494,7 @@ git commit -m "test(server): end-to-end weave decider+projector roundtrip"
 ## Task 11: Repo-wide Definition-of-Done gate
 
 **Files:**
+
 - None (validation only).
 
 **Pre-flight HEAD expectation:** top three commits Task 10 → Task 9 → Task 8.

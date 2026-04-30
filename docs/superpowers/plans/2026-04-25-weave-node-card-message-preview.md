@@ -6,7 +6,7 @@
 
 **Goal:** Add a 1-line preview of the child thread's latest assistant message text to each running node's row in `WeaveBlueprintList`. Closes the gap left by `weave-v0.1-node-card-detail` (which only added the failure reason and execution timer; the user explicitly asked for "the current turn of the execution must be displayed as a 1-liner on the right side of the node when it's running").
 
-**Why now:** without this, a running weave is a wall of node rows with timers but no signal as to *what each agent is actually doing right now*. A truncated 1-line preview of the latest assistant text is the smallest readable signal and was the user's stated requirement.
+**Why now:** without this, a running weave is a wall of node rows with timers but no signal as to _what each agent is actually doing right now_. A truncated 1-line preview of the latest assistant text is the smallest readable signal and was the user's stated requirement.
 
 **Architecture in one paragraph:** For each blueprint node whose `meta.status === "running"`, retain a per-node `ThreadDetailSubscription` against `meta.childThreadId` for the duration the node is running. The retained subscription populates `state.environmentStateById[envId].threadDetailById[threadId]` in the store; a small selector reads the most recent assistant message text from `thread.messages`, returns it as a string, and the existing `WeaveNodeCard` right cluster renders it (truncated to one line) above the timer when `meta.status === "running"`. Release subscriptions on unmount and when a node leaves the running state.
 
@@ -73,6 +73,7 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
 ## Task 1: Subscription manager — `useWeaveRunningNodeSubscriptions`
 
 **Files:**
+
 - Create `apps/web/src/weave/useWeaveRunningNodeSubscriptions.ts`.
 - Create `apps/web/src/weave/useWeaveRunningNodeSubscriptions.test.ts`.
 
@@ -110,10 +111,9 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
   }
   ```
 
-  **Stability note:** depending on `runningChildThreadIds` directly causes the effect to re-run every render because the parent passes a fresh array. Use a `.join("|")` of sorted ids as a string dep so the effect only re-runs when the *content* changes. Document this clearly.
+  **Stability note:** depending on `runningChildThreadIds` directly causes the effect to re-run every render because the parent passes a fresh array. Use a `.join("|")` of sorted ids as a string dep so the effect only re-runs when the _content_ changes. Document this clearly.
 
 - [ ] **Step 1.2: Tests.** Use vitest + jsdom (or node) — no real React rendering needed. Mock `retainThreadDetailSubscription` to return a spy `release()` function. Verify:
-
   - On mount with `["t-1", "t-2"]`, retains both threads.
   - On rerender with `["t-1"]`, releases `t-2`.
   - On unmount, releases all retained.
@@ -134,6 +134,7 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
 ## Task 2: Wire selector + render preview in `WeaveNodeCard`
 
 **Files:**
+
 - Modify `apps/web/src/weave/weaveStore.ts` — add selector / accessor for "latest assistant text by thread id".
 - Modify `apps/web/src/components/weave/WeaveBlueprintList.tsx` — call `useWeaveRunningNodeSubscriptions`; for each running node, derive `latestMessage` and pass to the card.
 - Modify `apps/web/src/components/weave/WeaveNodeCard.tsx` — accept `latestMessage?: string`; render it as a one-line truncated span when status === "running".
@@ -188,7 +189,7 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
         if (child) ids.push(child.threadId);
       }
     }
-    ids.sort();  // stable order for the join key
+    ids.sort(); // stable order for the join key
     return ids;
   }, [detail.nodeMeta, detail.childThreads]);
 
@@ -202,7 +203,10 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
     const meta = detail.nodeMeta.get(node.id) ?? null;
     const childThreadId =
       meta?.status === "running" ? (detail.childThreads.get(node.id)?.threadId ?? null) : null;
-    const latestMessage = useLatestAssistantText(environmentId, childThreadId ?? ("__none__" as ThreadId));
+    const latestMessage = useLatestAssistantText(
+      environmentId,
+      childThreadId ?? ("__none__" as ThreadId),
+    );
     return (
       <WeaveNodeCard
         node={node}
@@ -228,11 +232,11 @@ apps/web/src/components/weave/WeaveView.browser.tsx           — fixture for ne
   Render above the existing timer in the right cluster, only when `meta?.status === "running"`:
 
   ```tsx
-  {status === "running" && latestMessage && (
-    <span className="block text-xs text-muted-foreground italic truncate">
-      {latestMessage}
-    </span>
-  )}
+  {
+    status === "running" && latestMessage && (
+      <span className="block text-xs text-muted-foreground italic truncate">{latestMessage}</span>
+    );
+  }
   ```
 
   Place it ABOVE the timer (timer drops to a second line) so the message gets visual priority. Truncate-on-overflow keeps the row to two lines max.

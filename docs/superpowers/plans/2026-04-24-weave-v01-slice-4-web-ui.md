@@ -18,37 +18,37 @@ Slice 4 is the first slice users interact with. Slice 3 delivered a working engi
 
 Per [v0.1-spec.md §Slice 4](../../weave/v0.1-spec.md#slice-4--web-ui-intake--list-form-blueprint--inspector), the required artifacts are:
 
-| File | New/Modify | Purpose |
-|---|---|---|
-| `apps/web/src/routes/_weave.$environmentId.$weaveRunId.tsx` | new | Top-level Weave Run route |
-| `apps/web/src/routes/_weave.$environmentId.$weaveRunId.node.$nodeId.tsx` | new | Node drill-down |
-| `apps/web/src/components/weave/WeaveView.tsx` | new | Shell; picks sub-view by status |
-| `apps/web/src/components/weave/WeaveIntakeView.tsx` | new | Placeholder while Blueprint compiles |
-| `apps/web/src/components/weave/WeaveBlueprintList.tsx` | new | v0.1 list form — grouped by Phase |
-| `apps/web/src/components/weave/WeaveNodeCard.tsx` | new | Per-Node row |
-| `apps/web/src/components/weave/WeaveInspector.tsx` | new | Right panel embedding child-thread `ChatView` |
-| `apps/web/src/components/weave/WeaveExecutionHeader.tsx` | new | Counters + locked concurrency slider + Run/Pause |
-| `apps/web/src/components/weave/WeaveRunSidebarItem.tsx` | new | Sidebar row |
-| `apps/web/src/components/weave/WeaveCreatedMarker.tsx` | new | Parent-chat anchor |
-| `apps/web/src/weave/weaveStore.ts` | new | Zustand slice + selectors (see §Open-questions) |
-| `apps/web/src/weave/weaveRouteSearch.ts` | new | Route search params |
-| `apps/web/src/weave/weaveThreadSnapshot.ts` | new | Markdown-snapshot of a thread's history |
+| File                                                                     | New/Modify | Purpose                                          |
+| ------------------------------------------------------------------------ | ---------- | ------------------------------------------------ |
+| `apps/web/src/routes/_weave.$environmentId.$weaveRunId.tsx`              | new        | Top-level Weave Run route                        |
+| `apps/web/src/routes/_weave.$environmentId.$weaveRunId.node.$nodeId.tsx` | new        | Node drill-down                                  |
+| `apps/web/src/components/weave/WeaveView.tsx`                            | new        | Shell; picks sub-view by status                  |
+| `apps/web/src/components/weave/WeaveIntakeView.tsx`                      | new        | Placeholder while Blueprint compiles             |
+| `apps/web/src/components/weave/WeaveBlueprintList.tsx`                   | new        | v0.1 list form — grouped by Phase                |
+| `apps/web/src/components/weave/WeaveNodeCard.tsx`                        | new        | Per-Node row                                     |
+| `apps/web/src/components/weave/WeaveInspector.tsx`                       | new        | Right panel embedding child-thread `ChatView`    |
+| `apps/web/src/components/weave/WeaveExecutionHeader.tsx`                 | new        | Counters + locked concurrency slider + Run/Pause |
+| `apps/web/src/components/weave/WeaveRunSidebarItem.tsx`                  | new        | Sidebar row                                      |
+| `apps/web/src/components/weave/WeaveCreatedMarker.tsx`                   | new        | Parent-chat anchor                               |
+| `apps/web/src/weave/weaveStore.ts`                                       | new        | Zustand slice + selectors (see §Open-questions)  |
+| `apps/web/src/weave/weaveRouteSearch.ts`                                 | new        | Route search params                              |
+| `apps/web/src/weave/weaveThreadSnapshot.ts`                              | new        | Markdown-snapshot of a thread's history          |
 
 **Also in scope** — integration plumbing:
 
-| File | Change |
-|---|---|
-| `packages/contracts/src/orchestration.ts` | Extend `OrchestrationShellSnapshot` with `weaveRuns: Array<OrchestrationWeaveRunShell>`; extend `OrchestrationShellStreamEvent` with `weave-run-upserted` / `weave-run-removed`; add `ORCHESTRATION_WS_METHODS.subscribeWeaveRun`, `OrchestrationSubscribeWeaveRunInput`, `OrchestrationWeaveRunStreamItem`. |
-| `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts` | Build weave-run summaries from `readModel.weaveRuns` into the shell snapshot. |
-| `apps/server/src/orchestration/Layers/ShellStreamService.ts` (if one exists — otherwise the shell-stream producer) | Emit `weave-run-upserted` / `weave-run-removed` when weave events land. |
-| `apps/server/src/ws.ts` | Add `[ORCHESTRATION_WS_METHODS.subscribeWeaveRun]` handler mirroring `subscribeThread`. |
-| `apps/web/src/rpc/wsRpcClient.ts` | Expose `subscribeWeaveRun` on the client. |
-| `apps/web/src/environments/runtime/service.ts` | Wire ref-counted `subscribeWeaveRun` subscriptions (mirror `attachThreadDetailSubscription`). |
-| `apps/web/src/store.ts` | Add `weaveRunsById` and `weaveRunDetailById` slices, wire `applyEnvironmentShellEvent` / `applyEnvironmentWeaveRunDetailEvent`. |
-| `apps/web/src/composer-logic.ts` | Extend `ComposerSlashCommand` union + `parseStandaloneComposerSlashCommand` to include `"weave"`. |
-| `apps/web/src/components/chat/ChatComposer.tsx` and `ComposerCommandMenu.tsx` | Handle the `/weave` slash command submit path. |
-| `apps/web/src/components/Sidebar.tsx` | Render `WeaveRunSidebarItem` for weave runs in the project's group. |
-| `apps/web/src/components/ChatView.tsx` | Render `WeaveCreatedMarker` at the message position where `/weave` fired. |
+| File                                                                                                               | Change                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/contracts/src/orchestration.ts`                                                                          | Extend `OrchestrationShellSnapshot` with `weaveRuns: Array<OrchestrationWeaveRunShell>`; extend `OrchestrationShellStreamEvent` with `weave-run-upserted` / `weave-run-removed`; add `ORCHESTRATION_WS_METHODS.subscribeWeaveRun`, `OrchestrationSubscribeWeaveRunInput`, `OrchestrationWeaveRunStreamItem`. |
+| `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts`                                                  | Build weave-run summaries from `readModel.weaveRuns` into the shell snapshot.                                                                                                                                                                                                                                |
+| `apps/server/src/orchestration/Layers/ShellStreamService.ts` (if one exists — otherwise the shell-stream producer) | Emit `weave-run-upserted` / `weave-run-removed` when weave events land.                                                                                                                                                                                                                                      |
+| `apps/server/src/ws.ts`                                                                                            | Add `[ORCHESTRATION_WS_METHODS.subscribeWeaveRun]` handler mirroring `subscribeThread`.                                                                                                                                                                                                                      |
+| `apps/web/src/rpc/wsRpcClient.ts`                                                                                  | Expose `subscribeWeaveRun` on the client.                                                                                                                                                                                                                                                                    |
+| `apps/web/src/environments/runtime/service.ts`                                                                     | Wire ref-counted `subscribeWeaveRun` subscriptions (mirror `attachThreadDetailSubscription`).                                                                                                                                                                                                                |
+| `apps/web/src/store.ts`                                                                                            | Add `weaveRunsById` and `weaveRunDetailById` slices, wire `applyEnvironmentShellEvent` / `applyEnvironmentWeaveRunDetailEvent`.                                                                                                                                                                              |
+| `apps/web/src/composer-logic.ts`                                                                                   | Extend `ComposerSlashCommand` union + `parseStandaloneComposerSlashCommand` to include `"weave"`.                                                                                                                                                                                                            |
+| `apps/web/src/components/chat/ChatComposer.tsx` and `ComposerCommandMenu.tsx`                                      | Handle the `/weave` slash command submit path.                                                                                                                                                                                                                                                               |
+| `apps/web/src/components/Sidebar.tsx`                                                                              | Render `WeaveRunSidebarItem` for weave runs in the project's group.                                                                                                                                                                                                                                          |
+| `apps/web/src/components/ChatView.tsx`                                                                             | Render `WeaveCreatedMarker` at the message position where `/weave` fired.                                                                                                                                                                                                                                    |
 
 **Out of scope** (per spec §"Out of scope for v0.1"):
 
@@ -189,6 +189,7 @@ Test deliverables (spec §4.9 DoD):
 ## Task 1: Contracts — extend `OrchestrationShellSnapshot` with weave-run summaries
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts` — add `OrchestrationWeaveRunShell` + extend `OrchestrationShellSnapshot` + extend `OrchestrationShellStreamEvent`.
 - Modify: `packages/contracts/src/orchestration.test.ts` — add round-trip tests for the new shapes.
 - Modify: `packages/contracts/src/index.ts` — confirm wildcard re-export covers new symbols (likely already does).
@@ -346,12 +347,13 @@ Expected contracts test delta: +4. Server test count unchanged.
 ## Task 2: RPC — `subscribeWeaveRun(weaveRunId)` method
 
 **Files:**
+
 - Modify: `packages/contracts/src/orchestration.ts` — add `ORCHESTRATION_WS_METHODS.subscribeWeaveRun`, `OrchestrationSubscribeWeaveRunInput`, `OrchestrationWeaveRunDetailSnapshot`, `OrchestrationWeaveRunDetailEvent`, `OrchestrationWeaveRunStreamItem`.
 - Modify: `apps/server/src/ws.ts` — add the handler.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 1's commit.
 
-**Design:** mirror `subscribeThread` (which exists at ws.ts:696 per Slice 3 exploration). Snapshot returns the full `WeaveRunProjection` for the requested run; stream then sends every weave.* domain event for that run as it arrives.
+**Design:** mirror `subscribeThread` (which exists at ws.ts:696 per Slice 3 exploration). Snapshot returns the full `WeaveRunProjection` for the requested run; stream then sends every weave.\* domain event for that run as it arrives.
 
 - [ ] **Step 2.1: Contract shapes.**
 
@@ -361,22 +363,19 @@ In `packages/contracts/src/orchestration.ts`, after the `OrchestrationSubscribeT
 export const OrchestrationSubscribeWeaveRunInput = Schema.Struct({
   weaveRunId: WeaveRunId,
 });
-export type OrchestrationSubscribeWeaveRunInput =
-  typeof OrchestrationSubscribeWeaveRunInput.Type;
+export type OrchestrationSubscribeWeaveRunInput = typeof OrchestrationSubscribeWeaveRunInput.Type;
 
 export const OrchestrationWeaveRunDetailSnapshot = Schema.Struct({
   snapshotSequence: NonNegativeInt,
-  weaveRun: WeaveRunProjectionSchema,  // from ./weave.ts — imported at top of orchestration.ts
+  weaveRun: WeaveRunProjectionSchema, // from ./weave.ts — imported at top of orchestration.ts
 });
-export type OrchestrationWeaveRunDetailSnapshot =
-  typeof OrchestrationWeaveRunDetailSnapshot.Type;
+export type OrchestrationWeaveRunDetailSnapshot = typeof OrchestrationWeaveRunDetailSnapshot.Type;
 
 export const OrchestrationWeaveRunDetailEvent = Schema.Struct({
   kind: Schema.Literal("event"),
-  event: OrchestrationEvent,  // narrowed to weave.* types by type predicate at consume site
+  event: OrchestrationEvent, // narrowed to weave.* types by type predicate at consume site
 });
-export type OrchestrationWeaveRunDetailEvent =
-  typeof OrchestrationWeaveRunDetailEvent.Type;
+export type OrchestrationWeaveRunDetailEvent = typeof OrchestrationWeaveRunDetailEvent.Type;
 
 export const OrchestrationWeaveRunStreamItem = Schema.Union([
   Schema.Struct({
@@ -385,8 +384,7 @@ export const OrchestrationWeaveRunStreamItem = Schema.Union([
   }),
   OrchestrationWeaveRunDetailEvent,
 ]);
-export type OrchestrationWeaveRunStreamItem =
-  typeof OrchestrationWeaveRunStreamItem.Type;
+export type OrchestrationWeaveRunStreamItem = typeof OrchestrationWeaveRunStreamItem.Type;
 ```
 
 Then in `ORCHESTRATION_WS_METHODS` (line ~46):
@@ -482,6 +480,7 @@ Expected contracts delta: +0–1 tests. Server delta: +1 test.
 ## Task 3: Server — populate `weaveRuns` in shell snapshot + stream events
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts` — build `OrchestrationWeaveRunShell[]` from `readModel.weaveRuns` when building a shell snapshot.
 - Modify: the shell-stream producer (grep for `OrchestrationShellStreamEvent` in `apps/server/src/` — likely in a `ShellStreamService.ts` or directly inside `ws.ts`) — emit `weave-run-upserted` / `weave-run-removed` on weave events.
 - Modify: `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts` if it exists, else add one — assert the shell snapshot includes a summary after a `weave.create`.
@@ -502,17 +501,29 @@ Identify the function that produces `OrchestrationShellSnapshot`. Currently it b
 Add a pure helper (likely in the same file):
 
 ```ts
-function buildWeaveRunShell(
-  projection: WeaveRunProjection,
-): OrchestrationWeaveRunShell {
-  let pendingCount = 0, readyCount = 0, runningCount = 0, verifiedCount = 0, failedCount = 0;
+function buildWeaveRunShell(projection: WeaveRunProjection): OrchestrationWeaveRunShell {
+  let pendingCount = 0,
+    readyCount = 0,
+    runningCount = 0,
+    verifiedCount = 0,
+    failedCount = 0;
   for (const status of projection.nodeStatuses.values()) {
     switch (status) {
-      case "pending":  pendingCount++;  break;
-      case "ready":    readyCount++;    break;
-      case "running":  runningCount++;  break;
-      case "verified": verifiedCount++; break;
-      case "failed":   failedCount++;   break;
+      case "pending":
+        pendingCount++;
+        break;
+      case "ready":
+        readyCount++;
+        break;
+      case "running":
+        runningCount++;
+        break;
+      case "verified":
+        verifiedCount++;
+        break;
+      case "failed":
+        failedCount++;
+        break;
     }
   }
   return {
@@ -520,9 +531,13 @@ function buildWeaveRunShell(
     projectId: projection.run.projectId,
     title: projection.run.title,
     status: projection.run.status,
-    pendingCount, readyCount, runningCount, verifiedCount, failedCount,
+    pendingCount,
+    readyCount,
+    runningCount,
+    verifiedCount,
+    failedCount,
     createdAt: projection.run.createdAt,
-    updatedAt: projection.run.createdAt,  // v0.1: run has no updatedAt — use createdAt or latest event occurredAt
+    updatedAt: projection.run.createdAt, // v0.1: run has no updatedAt — use createdAt or latest event occurredAt
   };
 }
 ```
@@ -588,6 +603,7 @@ Expected server test delta: +1–2.
 ## Task 4: Client RPC — wire `subscribeWeaveRun` into `wsRpcClient`
 
 **Files:**
+
 - Modify: `apps/web/src/rpc/wsRpcClient.ts` — add the method to the client surface.
 - Modify: `apps/web/src/environments/runtime/service.ts` — add `attachWeaveRunDetailSubscription` mirroring `attachThreadDetailSubscription`.
 
@@ -645,6 +661,7 @@ No test delta yet — tests land with the store slice in Task 5.
 ## Task 5: Client store — `weaveRunsById` + `weaveRunDetailById` slices
 
 **Files:**
+
 - Modify: `apps/web/src/store.ts` — extend `EnvironmentState` and selectors.
 - Modify: `apps/web/src/orchestrationEventEffects.ts` — add weave event effect cases (noop for v0.1, but route them).
 - Create: `apps/web/src/weave/weaveStore.ts` — selectors + hooks (the store-facing surface — state still lives in the main Zustand store).
@@ -709,9 +726,7 @@ export function useWeaveRunsForProject(environmentId: EnvironmentId, projectId: 
 }
 
 export function useWeaveRunShell(environmentId: EnvironmentId, weaveRunId: WeaveRunId) {
-  return useStore(
-    (state) => state.environments[environmentId]?.weaveRunsById[weaveRunId] ?? null,
-  );
+  return useStore((state) => state.environments[environmentId]?.weaveRunsById[weaveRunId] ?? null);
 }
 
 export function useWeaveRunDetail(environmentId: EnvironmentId, weaveRunId: WeaveRunId) {
@@ -749,6 +764,7 @@ Expected web test delta: 0 (fixtures updated, no new tests yet).
 ## Task 6: Routes — `_weave.$environmentId.$weaveRunId.tsx` + search params
 
 **Files:**
+
 - Create: `apps/web/src/weave/weaveRouteSearch.ts` — search param schema.
 - Create: `apps/web/src/routes/_weave.$environmentId.$weaveRunId.tsx`.
 - Create: `apps/web/src/routes/_weave.$environmentId.$weaveRunId.node.$nodeId.tsx`.
@@ -839,6 +855,7 @@ git commit -m "feat(web): add weave run route + node drill-down route"
 ## Task 7: `WeaveView.tsx` — three-pane shell + status-dispatch
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveView.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 6's commit.
@@ -880,7 +897,9 @@ export function WeaveView(props: WeaveViewProps) {
       {/* Center: canvas */}
       <main className="flex flex-col overflow-y-auto">
         <WeaveExecutionHeader shell={shell} />
-        {shell.status === "complete" && <WeaveCompletionBanner environmentId={props.environmentId} weaveRunId={shell.id} />}
+        {shell.status === "complete" && (
+          <WeaveCompletionBanner environmentId={props.environmentId} weaveRunId={shell.id} />
+        )}
         {shell.status === "draft" && <WeaveIntakeView />}
         {shell.status === "reviewing" && detail?.currentBlueprint && (
           <>
@@ -892,9 +911,13 @@ export function WeaveView(props: WeaveViewProps) {
             <WeaveBlueprintList detail={detail} openNodeId={props.openNodeId} />
           </>
         )}
-        {(shell.status === "running" || shell.status === "complete" || shell.status === "failed" || shell.status === "aborted") && detail?.currentBlueprint && (
-          <WeaveBlueprintList detail={detail} openNodeId={props.openNodeId} />
-        )}
+        {(shell.status === "running" ||
+          shell.status === "complete" ||
+          shell.status === "failed" ||
+          shell.status === "aborted") &&
+          detail?.currentBlueprint && (
+            <WeaveBlueprintList detail={detail} openNodeId={props.openNodeId} />
+          )}
       </main>
 
       {/* Right: inspector */}
@@ -933,6 +956,7 @@ Typecheck will fail because the child components don't exist yet — either stub
 ## Task 8: `WeaveIntakeView.tsx` — compiling placeholder
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveIntakeView.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 7's commit.
@@ -940,7 +964,7 @@ Typecheck will fail because the child components don't exist yet — either stub
 - [ ] **Step 8.1: Component.**
 
 ```tsx
-import { Spinner } from "../ui/spinner";  // or the repo's equivalent
+import { Spinner } from "../ui/spinner"; // or the repo's equivalent
 
 export function WeaveIntakeView() {
   return (
@@ -970,6 +994,7 @@ git commit -m "feat(web): add WeaveIntakeView placeholder"
 ## Task 9: `WeaveNodeCard.tsx` — per-node row
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveNodeCard.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 8's commit.
@@ -982,19 +1007,19 @@ import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 
 const STATUS_COLOR: Record<WeaveNodeStatus, string> = {
-  pending:  "bg-muted text-muted-foreground",
-  ready:    "bg-blue-500/20 text-blue-700",
-  running:  "bg-amber-500/20 text-amber-700",
+  pending: "bg-muted text-muted-foreground",
+  ready: "bg-blue-500/20 text-blue-700",
+  running: "bg-amber-500/20 text-amber-700",
   verified: "bg-green-500/20 text-green-700",
-  failed:   "bg-red-500/20 text-red-700",
+  failed: "bg-red-500/20 text-red-700",
 };
 
 const STATUS_ICON: Record<WeaveNodeStatus, string> = {
-  pending:  "○",
-  ready:    "●",
-  running:  "⏳",
+  pending: "○",
+  ready: "●",
+  running: "⏳",
   verified: "✓",
-  failed:   "✗",
+  failed: "✗",
 };
 
 export interface WeaveNodeCardProps {
@@ -1005,7 +1030,13 @@ export interface WeaveNodeCardProps {
   readonly onClick: () => void;
 }
 
-export function WeaveNodeCard({ node, status, dependsOnStatuses, selected, onClick }: WeaveNodeCardProps) {
+export function WeaveNodeCard({
+  node,
+  status,
+  dependsOnStatuses,
+  selected,
+  onClick,
+}: WeaveNodeCardProps) {
   return (
     <button
       type="button"
@@ -1015,7 +1046,12 @@ export function WeaveNodeCard({ node, status, dependsOnStatuses, selected, onCli
       )}
       onClick={onClick}
     >
-      <div className={cn("w-6 h-6 flex items-center justify-center rounded text-xs", STATUS_COLOR[status])}>
+      <div
+        className={cn(
+          "w-6 h-6 flex items-center justify-center rounded text-xs",
+          STATUS_COLOR[status],
+        )}
+      >
         {STATUS_ICON[status]}
       </div>
       <div className="flex-1 min-w-0">
@@ -1050,6 +1086,7 @@ git commit -m "feat(web): add WeaveNodeCard row"
 ## Task 10: `WeaveBlueprintList.tsx` — phase-grouped list
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveBlueprintList.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 9's commit.
@@ -1123,6 +1160,7 @@ git commit -m "feat(web): add WeaveBlueprintList phase-grouped view"
 ## Task 11: `WeaveInspector.tsx` — embedded ChatView
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveInspector.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 10's commit.
@@ -1144,9 +1182,7 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
   const childThread = weaveRunDetail.childThreads.get(openNodeId);
   if (!childThread) {
     return (
-      <div className="p-4 text-muted-foreground text-sm">
-        This node hasn't been dispatched yet.
-      </div>
+      <div className="p-4 text-muted-foreground text-sm">This node hasn't been dispatched yet.</div>
     );
   }
 
@@ -1156,16 +1192,16 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
         <div className="text-sm font-medium">Node: {openNodeId}</div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" asChild>
-            <a
-              href={`/${environmentId}/${childThread.threadId}`}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={`/${environmentId}/${childThread.threadId}`} target="_blank" rel="noreferrer">
               Open thread ↗
             </a>
           </Button>
           {isDesktop() && (
-            <Button variant="ghost" size="sm" onClick={() => revealInFileManager(childThread.worktreePath)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => revealInFileManager(childThread.worktreePath)}
+            >
               Open worktree
             </Button>
           )}
@@ -1183,7 +1219,7 @@ export function WeaveInspector({ environmentId, weaveRunDetail, openNodeId }: We
 }
 
 function isDesktop(): boolean {
-  return typeof window !== "undefined" && "TAURI" in window;  // adjust based on desktop shell
+  return typeof window !== "undefined" && "TAURI" in window; // adjust based on desktop shell
 }
 
 function revealInFileManager(path: string): void {
@@ -1209,6 +1245,7 @@ git commit -m "feat(web): add WeaveInspector with embedded ChatView"
 ## Task 12: `WeaveExecutionHeader.tsx` — counters + locked slider
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveExecutionHeader.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 11's commit.
@@ -1223,7 +1260,12 @@ export interface WeaveExecutionHeaderProps {
 }
 
 export function WeaveExecutionHeader({ shell }: WeaveExecutionHeaderProps) {
-  const total = shell.pendingCount + shell.readyCount + shell.runningCount + shell.verifiedCount + shell.failedCount;
+  const total =
+    shell.pendingCount +
+    shell.readyCount +
+    shell.runningCount +
+    shell.verifiedCount +
+    shell.failedCount;
   return (
     <header className="px-6 py-4 border-b border-border flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -1232,11 +1274,11 @@ export function WeaveExecutionHeader({ shell }: WeaveExecutionHeaderProps) {
       </div>
       <div className="flex items-center gap-6 text-xs">
         <Stat label="Verified" value={shell.verifiedCount} color="text-green-600" />
-        <Stat label="Running"  value={shell.runningCount}  color="text-amber-600" />
-        <Stat label="Ready"    value={shell.readyCount}    color="text-blue-600" />
-        <Stat label="Failed"   value={shell.failedCount}   color="text-red-600" />
-        <Stat label="Pending"  value={shell.pendingCount}  color="text-muted-foreground" />
-        <Stat label="Total"    value={total} />
+        <Stat label="Running" value={shell.runningCount} color="text-amber-600" />
+        <Stat label="Ready" value={shell.readyCount} color="text-blue-600" />
+        <Stat label="Failed" value={shell.failedCount} color="text-red-600" />
+        <Stat label="Pending" value={shell.pendingCount} color="text-muted-foreground" />
+        <Stat label="Total" value={total} />
         <div className="flex items-center gap-2 border-l border-border pl-6">
           <label className="text-muted-foreground">Concurrency</label>
           <input
@@ -1278,6 +1320,7 @@ git commit -m "feat(web): add WeaveExecutionHeader with counters + locked concur
 ## Task 13: `WeaveApproveCallout.tsx` — 4-tile approve banner
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveApproveCallout.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 12's commit.
@@ -1288,7 +1331,7 @@ git commit -m "feat(web): add WeaveExecutionHeader with counters + locked concur
 import type { Blueprint, EnvironmentId, WeaveRunId } from "@t3tools/contracts";
 import { BlueprintVersion, CommandId } from "@t3tools/contracts";
 import { Button } from "../ui/button";
-import { dispatchWeaveCommand } from "../../weave/dispatchWeaveCommand";  // helper created here or inline
+import { dispatchWeaveCommand } from "../../weave/dispatchWeaveCommand"; // helper created here or inline
 
 export interface WeaveApproveCalloutProps {
   readonly environmentId: EnvironmentId;
@@ -1296,11 +1339,15 @@ export interface WeaveApproveCalloutProps {
   readonly blueprint: Blueprint;
 }
 
-export function WeaveApproveCallout({ environmentId, weaveRunId, blueprint }: WeaveApproveCalloutProps) {
+export function WeaveApproveCallout({
+  environmentId,
+  weaveRunId,
+  blueprint,
+}: WeaveApproveCalloutProps) {
   const phaseCount = blueprint.phases.length;
   const nodeCount = blueprint.nodes.length;
   const extractionCount = blueprint.extractions?.length ?? 0;
-  const estWallTime = "≈ 10–30 min";  // v0.1 placeholder per spec §4.6
+  const estWallTime = "≈ 10–30 min"; // v0.1 placeholder per spec §4.6
 
   const handleApprove = async () => {
     await dispatchWeaveCommand(environmentId, {
@@ -1308,7 +1355,7 @@ export function WeaveApproveCallout({ environmentId, weaveRunId, blueprint }: We
       commandId: CommandId.make(crypto.randomUUID()),
       weaveRunId,
       blueprintVersion: BlueprintVersion.make(blueprint.version),
-      concurrencyCap: 1,  // v0.1 locked
+      concurrencyCap: 1, // v0.1 locked
       createdAt: new Date().toISOString(),
     });
   };
@@ -1322,7 +1369,9 @@ export function WeaveApproveCallout({ environmentId, weaveRunId, blueprint }: We
         <Tile label="Est. wall time" value={estWallTime} />
       </div>
       <div className="flex gap-3">
-        <Button onClick={handleApprove} autoFocus>Approve & run (⌘↵)</Button>
+        <Button onClick={handleApprove} autoFocus>
+          Approve & run (⌘↵)
+        </Button>
         <Button variant="outline" disabled title="Direct-edit ships in v0.3">
           Edit Blueprint
         </Button>
@@ -1384,6 +1433,7 @@ git commit -m "feat(web): add WeaveApproveCallout with approve dispatch + shortc
 ## Task 14: `WeaveCompletionBanner.tsx`
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveCompletionBanner.tsx`.
 
 **Pre-flight HEAD expectation:** top-of-chain is Task 13's commit.
@@ -1429,6 +1479,7 @@ git commit -m "feat(web): add WeaveCompletionBanner"
 ## Task 15: `WeaveRunSidebarItem.tsx` + sidebar integration
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveRunSidebarItem.tsx`.
 - Modify: `apps/web/src/components/Sidebar.tsx` — render `WeaveRunSidebarItem` in each project's group.
 
@@ -1448,7 +1499,12 @@ export interface WeaveRunSidebarItemProps {
 }
 
 export function WeaveRunSidebarItem({ environmentId, weaveRun, active }: WeaveRunSidebarItemProps) {
-  const total = weaveRun.pendingCount + weaveRun.readyCount + weaveRun.runningCount + weaveRun.verifiedCount + weaveRun.failedCount;
+  const total =
+    weaveRun.pendingCount +
+    weaveRun.readyCount +
+    weaveRun.runningCount +
+    weaveRun.verifiedCount +
+    weaveRun.failedCount;
   const done = weaveRun.verifiedCount;
   return (
     <Link
@@ -1459,17 +1515,29 @@ export function WeaveRunSidebarItem({ environmentId, weaveRun, active }: WeaveRu
         active && "bg-cyan-500/10",
       )}
     >
-      <span className="text-cyan-600">◇</span>  {/* weave mark glyph */}
+      <span className="text-cyan-600">◇</span> {/* weave mark glyph */}
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{weaveRun.title}</div>
         <div className="text-xs text-muted-foreground flex gap-2">
-          <span>{done}/{total}</span>
-          {weaveRun.failedCount > 0 && <span className="text-red-600">{weaveRun.failedCount} failed</span>}
-          {weaveRun.runningCount > 0 && <span className="text-amber-600">{weaveRun.runningCount} running</span>}
+          <span>
+            {done}/{total}
+          </span>
+          {weaveRun.failedCount > 0 && (
+            <span className="text-red-600">{weaveRun.failedCount} failed</span>
+          )}
+          {weaveRun.runningCount > 0 && (
+            <span className="text-amber-600">{weaveRun.runningCount} running</span>
+          )}
         </div>
         <div className="h-1 bg-muted rounded mt-1 overflow-hidden flex">
-          <div className="bg-green-500" style={{ width: `${(done / Math.max(total, 1)) * 100}%` }} />
-          <div className="bg-red-500" style={{ width: `${(weaveRun.failedCount / Math.max(total, 1)) * 100}%` }} />
+          <div
+            className="bg-green-500"
+            style={{ width: `${(done / Math.max(total, 1)) * 100}%` }}
+          />
+          <div
+            className="bg-red-500"
+            style={{ width: `${(weaveRun.failedCount / Math.max(total, 1)) * 100}%` }}
+          />
         </div>
       </div>
     </Link>
@@ -1505,6 +1573,7 @@ git commit -m "feat(web): add WeaveRunSidebarItem + sidebar integration"
 ## Task 16: `/weave` slash command + `weaveThreadSnapshot.ts` + navigation
 
 **Files:**
+
 - Create: `apps/web/src/weave/weaveThreadSnapshot.ts`.
 - Modify: `apps/web/src/composer-logic.ts` — extend `ComposerSlashCommand` union, extend `parseStandaloneComposerSlashCommand`.
 - Modify: `apps/web/src/components/chat/ChatComposer.tsx` — handle `/weave` submit.
@@ -1528,9 +1597,7 @@ import type { OrchestrationMessage } from "@t3tools/contracts";
  * Format: alternating **User:** / **Assistant:** headings, preserving
  * message text. Skips tool calls, attachments, and activity entries for v0.1.
  */
-export function buildThreadMarkdownSnapshot(
-  messages: ReadonlyArray<OrchestrationMessage>,
-): string {
+export function buildThreadMarkdownSnapshot(messages: ReadonlyArray<OrchestrationMessage>): string {
   const lines: string[] = [];
   for (const msg of messages) {
     if (msg.role === "user") {
@@ -1641,6 +1708,7 @@ export function WeaveCreatedMarker({ environmentId, weaveRunId, title }: WeaveCr
 - [ ] **Step 16.6: ChatView anchor rendering.**
 
 In `apps/web/src/components/ChatView.tsx`, when rendering messages, detect messages that triggered a `/weave` command. Two approaches:
+
 - **Client-side marker:** locally track `(threadId, messageId) → weaveRunId` in the store.
 - **Server-side event:** the `weave.created` event carries `parentMessageId` — the thread's event stream can be checked for weave-created events referencing each message.
 
@@ -1674,6 +1742,7 @@ git commit -m "feat(web): add /weave slash command, thread snapshot, marker"
 ## Task 17: Browser tests — `/weave` flow + blueprint list + inspector
 
 **Files:**
+
 - Create: `apps/web/src/components/weave/WeaveView.browser.tsx`.
 - Possibly create: `apps/web/src/components/weave/WeaveBlueprintList.browser.tsx`.
 

@@ -91,6 +91,7 @@ apps/web/src/components/weave/WeaveInspector.tsx       — structured header abo
 ## Task 1: Contracts — `WeaveNodeMeta` + projection rename
 
 **Files:**
+
 - Modify `packages/contracts/src/weave.ts`:
   - Add `WeaveNodeMeta = Schema.Struct({ status: WeaveNodeStatus, dispatchedAt: optional IsoDateTime, verifiedAt: optional IsoDateTime, failedAt: optional IsoDateTime, failureReason: optional Schema.String })`.
   - Replace `nodeStatuses: ReadonlyMap(WeaveNodeId, WeaveNodeStatus)` with `nodeMeta: ReadonlyMap(WeaveNodeId, WeaveNodeMeta)` on `WeaveRunProjectionSchema`.
@@ -147,6 +148,7 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
 ## Task 2: Server projector + persistence + tests
 
 **Files:**
+
 - Modify `apps/server/src/orchestration/weaveProjector.ts` — populate `nodeMeta` from event payloads.
 - Modify `apps/server/src/orchestration/Layers/WeaveScheduler.ts` — if it reads `nodeStatuses` to decide ready set, update.
 - Modify any other server reader of `nodeStatuses` (grep `nodeStatuses` server-wide).
@@ -158,7 +160,6 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
 - [ ] **Step 2.1: Inspect persistence path.** Grep `nodeStatuses` in `apps/server/src/persistence/` to confirm whether the projection is JSON-serialized as a whole or has individual columns. If JSON, no migration; if columnar, write migration.
 
 - [ ] **Step 2.2: Update projector branches:**
-
   - `weave.blueprint-compiled`: rebuild `nodeMeta` with `{status: "pending"}` for each node.
   - `weave.node-dispatched`: `nodeMeta.set(nodeId, { status: "running", dispatchedAt: payload.occurredAt })`.
   - `weave.node-verified`: read existing `meta`, set `{ ...meta, status: "verified", verifiedAt: payload.occurredAt }`.
@@ -177,6 +178,7 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
 ## Task 3: Web store + selectors + browser tests
 
 **Files:**
+
 - Modify `apps/web/src/store.ts` — `applyWeaveEventToDetail` handles new field.
 - Modify `apps/web/src/weave/weaveStore.ts` — add `useNodeMeta(envId, runId, nodeId)` selector.
 - Update existing selectors that read `detail.nodeStatuses` to read `detail.nodeMeta.get(id)?.status`.
@@ -193,7 +195,10 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
 - [ ] **Step 3.2: Selectors.** Update `useWeaveRunDetail` callers as needed. Add a small accessor:
 
   ```ts
-  export function getNodeMeta(detail: WeaveRunProjection, nodeId: WeaveNodeId): WeaveNodeMeta | null {
+  export function getNodeMeta(
+    detail: WeaveRunProjection,
+    nodeId: WeaveNodeId,
+  ): WeaveNodeMeta | null {
     return detail.nodeMeta.get(nodeId) ?? null;
   }
   ```
@@ -213,6 +218,7 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
 ## Task 4: UI — `useTickingNow`, node-card right cluster, inspector header
 
 **Files:**
+
 - Create `apps/web/src/hooks/useTickingNow.ts` + `.test.ts`.
 - Modify `apps/web/src/components/weave/WeaveNodeCard.tsx` — accept `meta: WeaveNodeMeta | null` and `now: number`; render right-side cluster.
 - Modify `apps/web/src/components/weave/WeaveBlueprintList.tsx` — call `useTickingNow(1000)`; pass `meta` + `now` to each card.
@@ -264,9 +270,7 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
     )}
     {status === "verified" && meta?.verifiedAt && meta?.dispatchedAt && (
       <span>
-        {formatElapsed(
-          new Date(meta.verifiedAt).getTime() - new Date(meta.dispatchedAt).getTime(),
-        )}
+        {formatElapsed(new Date(meta.verifiedAt).getTime() - new Date(meta.dispatchedAt).getTime())}
       </span>
     )}
   </div>
@@ -295,17 +299,13 @@ This **breaks the contract shape** — every consumer that reads `nodeStatuses` 
       <h2 className="text-base font-semibold truncate">{node?.title ?? openNodeId}</h2>
       <StatusPill status={meta?.status ?? "pending"} />
     </div>
-    {node?.description && (
-      <p className="text-sm text-muted-foreground">{node.description}</p>
-    )}
+    {node?.description && <p className="text-sm text-muted-foreground">{node.description}</p>}
     {meta?.dispatchedAt && (
       <p className="text-xs text-muted-foreground">
         Dispatched {formatRelativeTime(meta.dispatchedAt)}
       </p>
     )}
-    {meta?.failureReason && (
-      <p className="text-xs text-red-600">Failed: {meta.failureReason}</p>
-    )}
+    {meta?.failureReason && <p className="text-xs text-red-600">Failed: {meta.failureReason}</p>}
   </header>
   ```
 

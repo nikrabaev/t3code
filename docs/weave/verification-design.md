@@ -17,8 +17,8 @@ Design memo for the verifier subsystem. Not yet a build spec. Read [concepts.md]
 v0.1's `WeaveContractConformer` resolves a single shell command (`node.verifierCommand` ?? `project.verifierCommand` ?? `"npm run test"`) and runs it in the Node's worktree. Exit 0 = `verified`, anything else = `failed`. This is brittle in three concrete ways:
 
 1. **Bootstrap problem.** A `scaffold` Node creates the initial repo structure. There is no `package.json` yet, or no `test` script in it, or no test files to run. The default verifier fails on every first Node, regardless of whether the Node did its job correctly.
-2. **Self-graded homework.** When the Node *does* have tests, the same agent wrote both the implementation and the tests. Failures are correlated; tests get rewritten until green. `roadmap.md §F3` calls this out explicitly.
-3. **Green-but-broken.** Even with tests passing, nothing checks that the Node implemented the *spec* — only that whatever it implemented is internally consistent with whatever it tested.
+2. **Self-graded homework.** When the Node _does_ have tests, the same agent wrote both the implementation and the tests. Failures are correlated; tests get rewritten until green. `roadmap.md §F3` calls this out explicitly.
+3. **Green-but-broken.** Even with tests passing, nothing checks that the Node implemented the _spec_ — only that whatever it implemented is internally consistent with whatever it tested.
 
 The user-facing symptom is that the verifier signal is untrustworthy, which means the scheduler's "advance to next Node only on green" guarantee is hollow.
 
@@ -26,15 +26,15 @@ The user-facing symptom is that the verifier signal is untrustworthy, which mean
 
 `architecture.md §Verifier composition` specifies a seven-stage layered Verifier:
 
-| # | Stage | Status in v0.1 |
-|---|---|---|
-| 1 | typecheck | not implemented |
-| 2 | build | not implemented |
-| 3 | spec-compliance reviewer subagent | not implemented |
-| 4 | Contract-conformance tests (ancestor-authored) | not implemented |
-| 5 | Node-authored unit tests (TDD loop) | **implemented (the one stage v0.1 ships)** |
-| 6 | code-quality reviewer subagent | not implemented |
-| 7 | optional judge-LLM | not implemented |
+| #   | Stage                                          | Status in v0.1                             |
+| --- | ---------------------------------------------- | ------------------------------------------ |
+| 1   | typecheck                                      | not implemented                            |
+| 2   | build                                          | not implemented                            |
+| 3   | spec-compliance reviewer subagent              | not implemented                            |
+| 4   | Contract-conformance tests (ancestor-authored) | not implemented                            |
+| 5   | Node-authored unit tests (TDD loop)            | **implemented (the one stage v0.1 ships)** |
+| 6   | code-quality reviewer subagent                 | not implemented                            |
+| 7   | optional judge-LLM                             | not implemented                            |
 
 `concepts.md §Contract` defines a Contract as having three parts: (a) syntactic surface, (b) semantic expectations, (c) a conformance test the Verifier can execute. Part (c) is **ancestor-authored** — that's the entire point of the inverted "tests live above code" choice. v0.1 deliberately defers (c) per [v0.1-spec.md §3.4](v0.1-spec.md#34-weavecontractconformer--v01-naive). v0.2 deferred it again in favor of parallelization.
 
@@ -54,12 +54,12 @@ The single-command model bakes three assumptions, all wrong for at least one Nod
 
 Different Node kinds need different evidence:
 
-| Kind | Useful evidence |
-|---|---|
-| `scaffold` | structural: files exist, JSON parses, `bun install` succeeds, expected scripts present |
-| `contract` | type-only: `tsc --noEmit` passes; declared exports match the surface; LLM review against spec |
-| `utility` | typecheck + tests if a test runner exists |
-| `raw` | full stack: structural + typecheck + build + ancestor conformance tests + Node tests + judge-LLM |
+| Kind       | Useful evidence                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| `scaffold` | structural: files exist, JSON parses, `bun install` succeeds, expected scripts present           |
+| `contract` | type-only: `tsc --noEmit` passes; declared exports match the surface; LLM review against spec    |
+| `utility`  | typecheck + tests if a test runner exists                                                        |
+| `raw`      | full stack: structural + typecheck + build + ancestor conformance tests + Node tests + judge-LLM |
 
 The `kind` field is the missing lever.
 
@@ -69,7 +69,7 @@ Two intuitive proposals, each partially right:
 
 ### TDD — make the agent write tests before code
 
-The naive form is flawed because the same agent writes both. Failures correlate; tests get rewritten until green. The variant that works is **ancestor-authored conformance tests**: a *different* agent (the planner authoring the parent's Contract) writes the tests, the descendant Node receives them in its dispatch payload as read-only files, and the verifier runs them.
+The naive form is flawed because the same agent writes both. Failures correlate; tests get rewritten until green. The variant that works is **ancestor-authored conformance tests**: a _different_ agent (the planner authoring the parent's Contract) writes the tests, the descendant Node receives them in its dispatch payload as read-only files, and the verifier runs them.
 
 This is `concepts.md §Contract` part (c). Implementing it properly subsumes "TDD as a Weave practice" without the self-grading flaw.
 
@@ -111,12 +111,28 @@ This is the architectural fix to self-graded homework. Bring it forward.
 Add to `WeaveContract`:
 
 ```ts
-structuralChecks: Schema.optional(Schema.Array(Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("file-exists"),   path: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal("json-has-path"), file: Schema.String, jsonPath: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal("exports"),       file: Schema.String, names: Schema.Array(Schema.String) }),
-  Schema.Struct({ kind: Schema.Literal("imports-from"),  file: Schema.String, module: Schema.String }),
-])))
+structuralChecks: Schema.optional(
+  Schema.Array(
+    Schema.Union([
+      Schema.Struct({ kind: Schema.Literal("file-exists"), path: Schema.String }),
+      Schema.Struct({
+        kind: Schema.Literal("json-has-path"),
+        file: Schema.String,
+        jsonPath: Schema.String,
+      }),
+      Schema.Struct({
+        kind: Schema.Literal("exports"),
+        file: Schema.String,
+        names: Schema.Array(Schema.String),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal("imports-from"),
+        file: Schema.String,
+        module: Schema.String,
+      }),
+    ]),
+  ),
+);
 ```
 
 Cheap, deterministic, no flaky tests. Catches "agent created stub instead of real impl" and "agent forgot to export a declared symbol." Lives on the Contract — ancestor-authored — to preserve V4.

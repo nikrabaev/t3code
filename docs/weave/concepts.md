@@ -4,25 +4,25 @@ These are the load-bearing names in Weave. Use them verbatim; do not invent syno
 
 ## Quick reference
 
-| Term | One-line gloss |
-|---|---|
-| **Vision** | user goal + questionnaire answers; immutable within a Phase |
-| **Questionnaire** | structured intake that produces the Vision |
-| **Blueprint** | the compiled plan — a DAG of Nodes organized into Phases, annotated with Contracts and PendingDecisions |
-| **Node** | a unit of work executable in one fresh LLM conversation |
-| **Contract** | typed, testable interface a Node exposes to its descendants (author: ancestor, not the Node) |
-| **Scope** | a Node's declared read-set + write-set, enforced by the Orchestrator |
-| **Verifier** | layered acceptance check (see [architecture.md](architecture.md#verifier-composition)) |
-| **Integration Node** | a Node whose Scope is a shared-surface file; runs after its sibling group |
-| **Phase** | maximal sub-DAG whose completion produces a user-demonstrable end-state; sync point + approval gate |
-| **PendingDecision** | a deferred choice treated as a first-class scheduler prerequisite |
-| **Orchestrator** | the runtime that walks the Blueprint, dispatches workers, enforces Scope, runs Verifiers |
+| Term                 | One-line gloss                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Vision**           | user goal + questionnaire answers; immutable within a Phase                                             |
+| **Questionnaire**    | structured intake that produces the Vision                                                              |
+| **Blueprint**        | the compiled plan — a DAG of Nodes organized into Phases, annotated with Contracts and PendingDecisions |
+| **Node**             | a unit of work executable in one fresh LLM conversation                                                 |
+| **Contract**         | typed, testable interface a Node exposes to its descendants (author: ancestor, not the Node)            |
+| **Scope**            | a Node's declared read-set + write-set, enforced by the Orchestrator                                    |
+| **Verifier**         | layered acceptance check (see [architecture.md](architecture.md#verifier-composition))                  |
+| **Integration Node** | a Node whose Scope is a shared-surface file; runs after its sibling group                               |
+| **Phase**            | maximal sub-DAG whose completion produces a user-demonstrable end-state; sync point + approval gate     |
+| **PendingDecision**  | a deferred choice treated as a first-class scheduler prerequisite                                       |
+| **Orchestrator**     | the runtime that walks the Blueprint, dispatches workers, enforces Scope, runs Verifiers                |
 
 ## Definitions
 
 ### Vision
 
-The user's goal plus questionnaire answers. Deliberately under-specified: captures *what must be true when we're done* and *what the user cares about*, not *how* to get there. The only artifact authored directly by the user. Ground truth for every replan. Immutable except at Phase boundaries.
+The user's goal plus questionnaire answers. Deliberately under-specified: captures _what must be true when we're done_ and _what the user cares about_, not _how_ to get there. The only artifact authored directly by the user. Ground truth for every replan. Immutable except at Phase boundaries.
 
 ### Questionnaire
 
@@ -56,7 +56,7 @@ A layered acceptance check. See [architecture.md](architecture.md#verifier-compo
 
 ### Integration Node
 
-A specialized Node whose Scope is a shared-surface file (top-level router, DI container, OpenAPI document) that sibling fragments must be stitched into. Runs *after* its sibling group. **Distinct from an ancestor:** an ancestor establishes the interface; an Integration Node assembles concrete fragments.
+A specialized Node whose Scope is a shared-surface file (top-level router, DI container, OpenAPI document) that sibling fragments must be stitched into. Runs _after_ its sibling group. **Distinct from an ancestor:** an ancestor establishes the interface; an Integration Node assembles concrete fragments.
 
 ### Phase
 
@@ -64,7 +64,7 @@ A maximal sub-DAG whose completion produces a user-demonstrable end-state — so
 
 ### PendingDecision
 
-A first-class graph prerequisite: a named deferred choice attached to one or more Nodes. Carries the question, option space, **blast radius** (which subtree depends on the answer), pre-authorization policy, and a resolution record once answered. A Node with unresolved PendingDecisions is not *ready* even if its ancestor Nodes are green. **Decisions and Nodes are both prerequisites; the scheduler doesn't distinguish them.**
+A first-class graph prerequisite: a named deferred choice attached to one or more Nodes. Carries the question, option space, **blast radius** (which subtree depends on the answer), pre-authorization policy, and a resolution record once answered. A Node with unresolved PendingDecisions is not _ready_ even if its ancestor Nodes are green. **Decisions and Nodes are both prerequisites; the scheduler doesn't distinguish them.**
 
 ### Orchestrator
 
