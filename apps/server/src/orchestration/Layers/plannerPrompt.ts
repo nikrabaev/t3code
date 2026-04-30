@@ -79,7 +79,7 @@ export function buildPlannerPrompt(input: {
     "- phases[].ordinal must be unique integers starting at 0.",
     "- Each Node's `phaseId` must match exactly one phase, and no two Nodes may share a phaseId.",
     "- Node `scope`, `inputContractIds`, `outputContractIds`, and `dependsOn` MUST all be empty for Planning Nodes — the per-Node sub-DAG is emitted later by the Planning Node itself, not by the meta-planner.",
-    '- `contracts` and `decisions` MUST both be empty arrays (`[]`). Authoring contracts and decisions is the responsibility of Phase Planners, not the meta-planner.',
+    "- `contracts` and `decisions` MUST both be empty arrays (`[]`). Authoring contracts and decisions is the responsibility of Phase Planners, not the meta-planner.",
     "- At least one phase and one Planning Node are required.",
     "",
     "USER VISION:",
