@@ -191,6 +191,11 @@ export const WeaveRun = Schema.Struct({
   status: WeaveRunStatus,
   currentPhaseId: Schema.optional(WeavePhaseId),
   concurrencyCap: ConcurrencyCap,
+  // Recursion guard for incremental planning. Counts: meta-plan = depth 0;
+  // a Phase Planning Node it emits = depth 1; etc. A Planning Node at depth
+  // `cap` may not emit further Planning Nodes. Default applied at construction:
+  // 3. Optional in the schema so existing fixtures keep decoding.
+  planningDepthCap: Schema.optional(NonNegativeInt),
   createdAt: IsoDateTime,
 });
 export type WeaveRun = typeof WeaveRun.Type;

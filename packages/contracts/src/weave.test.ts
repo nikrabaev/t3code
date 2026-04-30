@@ -450,6 +450,37 @@ it.effect("rejects concurrencyCap outside 1..8", () =>
   }),
 );
 
+it.effect("decodes a WeaveRun without planningDepthCap (field is optional)", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRun({
+      id: "run-1",
+      projectId: "project-1",
+      title: "Test run",
+      vision: "do the thing",
+      status: "draft",
+      concurrencyCap: 1,
+      createdAt: "2026-04-30T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.planningDepthCap, undefined);
+  }),
+);
+
+it.effect("decodes a WeaveRun with planningDepthCap = 3", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveRun({
+      id: "run-2",
+      projectId: "project-1",
+      title: "Capped run",
+      vision: "do the other thing",
+      status: "draft",
+      concurrencyCap: 1,
+      planningDepthCap: 3,
+      createdAt: "2026-04-30T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.planningDepthCap, 3);
+  }),
+);
+
 const decodeWeaveCreate = Schema.decodeUnknownEffect(WeaveCreateCommand);
 const decodeWeaveBlueprintApprove = Schema.decodeUnknownEffect(WeaveBlueprintApproveCommand);
 const decodeWeavePhaseApprove = Schema.decodeUnknownEffect(WeavePhaseApproveCommand);
