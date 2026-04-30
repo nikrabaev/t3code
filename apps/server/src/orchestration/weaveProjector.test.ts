@@ -641,7 +641,13 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
         },
       ],
       phases: [
-        { id: WeavePhaseId.make("p1"), ordinal: 0, title: "P1", description: "", approval: "pending" },
+        {
+          id: WeavePhaseId.make("p1"),
+          ordinal: 0,
+          title: "P1",
+          description: "",
+          approval: "pending",
+        },
       ],
       contracts: [],
       decisions: [],
@@ -748,7 +754,13 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
         },
       ],
       phases: [
-        { id: WeavePhaseId.make("p1"), ordinal: 0, title: "P1", description: "", approval: "pending" },
+        {
+          id: WeavePhaseId.make("p1"),
+          ordinal: 0,
+          title: "P1",
+          description: "",
+          approval: "pending",
+        },
       ],
       contracts: [],
       decisions: [],
