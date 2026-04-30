@@ -423,10 +423,135 @@ export function decideWeaveCommand(input: {
       });
     }
     case "weave.blueprint.extend": {
-      // TODO(slice-2): handled by WeaveScheduler when meta-planner emits a
-      // sub-DAG extension. For Slice 1 the runtime never produces this command,
-      // so no events are emitted here.
-      return Effect.succeed([]);
+      return Effect.gen(function* () {
+        const run = yield* requireRun({ projection, command });
+        yield* requireRunNotTerminal({ projection: run, command });
+
+        const bp = run.currentBlueprint;
+        if (bp === null) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `weave.blueprint.extend requires a compiled blueprint; none present.`,
+            }),
+          );
+        }
+
+        const plannerNode = bp.nodes.find((n) => n.id === command.plannerNodeId);
+        if (plannerNode === undefined) {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `planner node '${command.plannerNodeId}' not found in blueprint v${bp.version}.`,
+            }),
+          );
+        }
+        if (plannerNode.kind !== "planning") {
+          return yield* Effect.fail(
+            new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `planner node '${command.plannerNodeId}' has kind '${plannerNode.kind}'; expected 'planning'.`,
+            }),
+          );
+        }
+        yield* requireNodeStatus({
+          projection: run,
+          command,
+          nodeId: command.plannerNodeId,
+          allowed: ["running"],
+        });
+
+        // Validate addedNodes: phaseId consistency, no kind="planning" (Slice 3
+        // simplification), no ID collisions.
+        const existingIds = new Set(bp.nodes.map((n) => n.id as string));
+        const addedIds = new Set<string>();
+        for (const added of command.addedNodes) {
+          if (added.phaseId !== plannerNode.phaseId) {
+            return yield* Effect.fail(
+              new OrchestrationCommandInvariantError({
+                commandType: command.type,
+                detail: `addedNodes[*].phaseId must equal planner.phaseId ('${plannerNode.phaseId}'); got '${added.phaseId}' on node '${added.id}'.`,
+              }),
+            );
+          }
+          if (added.kind === "planning") {
+            return yield* Effect.fail(
+              new OrchestrationCommandInvariantError({
+                commandType: command.type,
+                detail: `Slice 3 rejects mid-phase Planning Nodes: added node '${added.id}' has kind='planning'.`,
+              }),
+            );
+          }
+          if (existingIds.has(added.id as string) || addedIds.has(added.id as string)) {
+            return yield* Effect.fail(
+              new OrchestrationCommandInvariantError({
+                commandType: command.type,
+                detail: `addedNodes contains duplicate or already-existing node id '${added.id}'.`,
+              }),
+            );
+          }
+          addedIds.add(added.id as string);
+        }
+
+        // Build the new Blueprint: append addedNodes, bump version, mark
+        // compiledBy as "phase-planning" (the literal added to BlueprintSource in
+        // Task 1) so projections can distinguish a Planning-Node-driven compile
+        // from a meta-planner one without inspecting the event chain.
+        //
+        // Per the design doc §"Why two events per planning emission?":
+        //   - weave.blueprint-extended: lightweight delta (added IDs only)
+        //   - weave.blueprint-compiled: full new Blueprint (so projections never
+        //     reconstruct from deltas)
+        const newVersion = (bp.version as number) + 1;
+        const newBlueprint = {
+          ...bp,
+          version: newVersion as never,
+          nodes: [...bp.nodes, ...command.addedNodes],
+          compiledAt: command.createdAt,
+          compiledBy: "phase-planning" as never,
+        };
+
+        return [
+          envelope({
+            type: "weave.node-verified",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              nodeId: command.plannerNodeId,
+              verifierOutcome: `phase-planning emission accepted (${command.addedNodes.length} node(s))`,
+              occurredAt: command.createdAt,
+            },
+          }),
+          envelope({
+            type: "weave.blueprint-extended",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              version: newVersion as never,
+              plannerNodeId: command.plannerNodeId,
+              addedNodeIds: command.addedNodes.map((n) => n.id),
+              occurredAt: command.createdAt,
+            },
+          }),
+          envelope({
+            type: "weave.blueprint-compiled",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              version: newVersion as never,
+              blueprint: newBlueprint,
+              compiledBy: "phase-planning" as never,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
     }
     default: {
       const _exhaustive: never = command;

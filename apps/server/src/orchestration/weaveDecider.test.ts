@@ -948,3 +948,231 @@ describe("decideWeaveCommand — weave.node.restart", () => {
     ).rejects.toThrow("status is 'verified'");
   });
 });
+
+describe("decideWeaveCommand — weave.blueprint.extend", () => {
+  function buildProjectionWithPlanningNode(params: {
+    plannerStatus?: WeaveNodeStatus;
+    runStatus?: "draft" | "reviewing" | "running";
+  }): WeaveRunProjection {
+    const base = buildRunningProjection({
+      nodes: [
+        {
+          id: "phase-1-planner",
+          status: params.plannerStatus ?? "running",
+          phaseId: "phase-1",
+        },
+      ],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    // Override kind and run status. The shared `buildRunningProjection` helper
+    // forces `kind: "raw"` for every node; rebuild the blueprint with kind
+    // "planning" so the decider's plannerNode lookup succeeds.
+    const bp = base.currentBlueprint!;
+    return {
+      ...base,
+      run: { ...base.run, status: params.runStatus ?? "running" },
+      currentBlueprint: {
+        ...bp,
+        nodes: bp.nodes.map((n) =>
+          n.id === WeaveNodeId.make("phase-1-planner") ? { ...n, kind: "planning" as const } : n,
+        ),
+      },
+    };
+  }
+
+  function makeAddedNode(overrides: {
+    id: string;
+    phaseId?: string;
+    kind?: "raw" | "scaffold" | "contract" | "utility" | "planning";
+  }) {
+    return {
+      id: WeaveNodeId.make(overrides.id),
+      title: `Task ${overrides.id}` as never,
+      description: "",
+      kind: (overrides.kind ?? "raw") as never,
+      phaseId: WeavePhaseId.make(overrides.phaseId ?? "phase-1"),
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "",
+      dependsOn: [],
+      status: "pending" as const,
+    };
+  }
+
+  it("happy path: emits node-verified + blueprint-extended + blueprint-compiled", async () => {
+    const projection = buildProjectionWithPlanningNode({});
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-extend-1"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [makeAddedNode({ id: "task-1" }), makeAddedNode({ id: "task-2" })],
+          createdAt: now,
+        },
+      }),
+    );
+
+    expect(events.length).toBe(3);
+    expect(events[0]?.type).toBe("weave.node-verified");
+    expect(events[1]?.type).toBe("weave.blueprint-extended");
+    expect(events[2]?.type).toBe("weave.blueprint-compiled");
+
+    // node-verified targets the planner node
+    expect(events[0]?.payload).toMatchObject({ nodeId: WeaveNodeId.make("phase-1-planner") });
+
+    // blueprint-extended carries the new version and the added IDs only
+    expect(events[1]?.payload).toMatchObject({
+      version: 2,
+      plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+      addedNodeIds: [WeaveNodeId.make("task-1"), WeaveNodeId.make("task-2")],
+    });
+
+    // blueprint-compiled carries the full new Blueprint at the new version
+    const compiledPayload = events[2]?.payload as {
+      version: number;
+      blueprint: { version: number; nodes: ReadonlyArray<{ id: string }>; compiledBy: string };
+    };
+    expect(compiledPayload.version).toBe(2);
+    expect(compiledPayload.blueprint.version).toBe(2);
+    expect(compiledPayload.blueprint.compiledBy).toBe("phase-planning");
+    expect(compiledPayload.blueprint.nodes.map((n) => n.id)).toEqual([
+      "phase-1-planner",
+      "task-1",
+      "task-2",
+    ]);
+  });
+
+  it("happy path with empty addedNodes (Phase concluded as no-op)", async () => {
+    const projection = buildProjectionWithPlanningNode({});
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-extend-noop"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events.length).toBe(3);
+    expect(events[1]?.payload).toMatchObject({ addedNodeIds: [] });
+  });
+
+  it("rejects when the run does not exist", async () => {
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection: null,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("rejects when the planner node is not kind=planning", async () => {
+    // Use the default buildRunningProjection which gives kind: "raw"
+    const projection = buildRunningProjection({
+      nodes: [{ id: "phase-1-planner", status: "running", phaseId: "phase-1" }],
+      phases: [{ id: "phase-1", ordinal: 0 }],
+    });
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("rejects when the planner node status is not running", async () => {
+    const projection = buildProjectionWithPlanningNode({ plannerStatus: "pending" });
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("rejects when an added node's phaseId differs from the planner's phaseId", async () => {
+    const projection = buildProjectionWithPlanningNode({});
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [makeAddedNode({ id: "task-1", phaseId: "phase-other" })],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("rejects when an added node has kind=planning (Slice 3 forbids recursion)", async () => {
+    const projection = buildProjectionWithPlanningNode({});
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [makeAddedNode({ id: "nested-planner", kind: "planning" })],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+
+  it("rejects when an added node id collides with an existing node id", async () => {
+    const projection = buildProjectionWithPlanningNode({});
+    const result = await Effect.runPromiseExit(
+      decideWeaveCommand({
+        projection,
+        command: {
+          type: "weave.blueprint.extend",
+          commandId: CommandId.make("cmd-x"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          plannerNodeId: WeaveNodeId.make("phase-1-planner"),
+          addedNodes: [makeAddedNode({ id: "phase-1-planner" })],
+          createdAt: now,
+        },
+      }),
+    );
+    expect(result._tag).toBe("Failure");
+  });
+});
