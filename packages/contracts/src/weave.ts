@@ -56,6 +56,7 @@ export const WeaveNodeKind = Schema.Literals([
   "scaffold", // project structure, tooling
   "contract", // interface-authoring
   "utility", // shared helper / migration / fixture
+  "planning", // emits a Blueprint extension (sub-DAG); not code
 ]);
 export type WeaveNodeKind = typeof WeaveNodeKind.Type;
 

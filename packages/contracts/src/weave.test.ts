@@ -93,7 +93,7 @@ it.effect("accepts every WeaveNodeStatus literal", () =>
 
 it.effect("accepts every WeaveNodeKind literal", () =>
   Effect.gen(function* () {
-    for (const k of ["raw", "scaffold", "contract", "utility"] as const) {
+    for (const k of ["raw", "scaffold", "contract", "utility", "planning"] as const) {
       assert.strictEqual(yield* decodeWeaveNodeKind(k), k);
     }
   }),
