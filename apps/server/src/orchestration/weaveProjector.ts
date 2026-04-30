@@ -124,9 +124,15 @@ export function projectWeaveEvent(
         );
       }
       const { payload } = event;
+      // Preserve `nodeMeta` for nodes that survive into the new Blueprint.
+      // New nodes (added by amendment/redesign/phase-planning) seed at "pending".
+      // This preserves the planner node's "verified" status set by the preceding
+      // `weave.node-verified` event in a `weave.blueprint.extend` batch (Slice 3
+      // emitted node-verified + extended + compiled together).
       const nextNodeMeta = new Map<WeaveNodeId, WeaveNodeMeta>();
       for (const node of payload.blueprint.nodes) {
-        nextNodeMeta.set(node.id, { status: "pending" });
+        const existing = state.nodeMeta.get(node.id);
+        nextNodeMeta.set(node.id, existing ?? { status: "pending" });
       }
       const nextOpenDecisions = new Set<WeaveDecisionId>();
       for (const decision of payload.blueprint.decisions) {

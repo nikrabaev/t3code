@@ -622,21 +622,14 @@ describe("WeaveContractConformer — planning kind", () => {
     expect(extendedPayload.plannerNodeId).toBe(nodeId);
     expect(extendedPayload.addedNodeIds).toEqual(["task-1"]);
 
-    // The decider emits `weave.node-verified` for the planner node alongside
-    // the blueprint events. Assert the event itself rather than the projected
-    // status: the existing `weave.blueprint-compiled` projector arm rebuilds
-    // `nodeMeta` from scratch (resetting to "pending") and does not yet
-    // preserve nodeMeta for `compiledBy: "phase-planning"` compiles. That
-    // projector behavior is a known design gap (see plan note line 133:
-    // "Planning Node transitions to verified") and is out of scope for this
-    // task per the file-modification scope.
-    const verifiedEvent = allEvents.find(
-      (e) =>
-        e.type === "weave.node-verified" &&
-        "payload" in e &&
-        (e.payload as { nodeId: string }).nodeId === nodeId,
+    // Slice 4 fix: the `weave.blueprint-compiled` projector arm now preserves
+    // prior `nodeMeta` entries, so the planner node keeps its `verified`
+    // status set by the preceding `weave.node-verified` event in the same
+    // dispatch batch.
+    const finalProjection = await system.run(
+      system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)),
     );
-    expect(verifiedEvent).toBeDefined();
+    expect(finalProjection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("verified");
 
     await system.dispose();
   });

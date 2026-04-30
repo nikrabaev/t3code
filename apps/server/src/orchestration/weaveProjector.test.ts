@@ -1,4 +1,5 @@
 import {
+  Blueprint,
   BlueprintVersion,
   CommandId,
   EventId,
@@ -10,7 +11,7 @@ import {
   WeavePhaseId,
   WeaveRunId,
 } from "@t3tools/contracts";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 
 import { projectWeaveEvent, type WeaveOrchestrationEvent } from "./weaveProjector.ts";
@@ -609,5 +610,161 @@ describe("projectWeaveEvent — weave.blueprint-extended", () => {
     // Same projection — `weave.blueprint-extended` is informational; the
     // sister `weave.blueprint-compiled` does the real mutation.
     expect(after).toBe(afterCreated);
+  });
+});
+
+describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)", () => {
+  it("preserves prior verified status when a node survives into a new Blueprint version", async () => {
+    // Build a starting projection with a node already verified.
+    const created = weaveEvent("weave.created", {
+      weaveRunId: WeaveRunId.make("run-preserve-1"),
+      projectId: ProjectId.make("project-1"),
+      title: "Test",
+      vision: "",
+      occurredAt: now,
+    });
+    const v1 = Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(1),
+      nodes: [
+        {
+          id: WeaveNodeId.make("n1"),
+          title: "N1",
+          description: "",
+          kind: "planning",
+          phaseId: WeavePhaseId.make("p1"),
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        { id: WeavePhaseId.make("p1"), ordinal: 0, title: "P1", description: "", approval: "pending" },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: now,
+      compiledBy: "planner",
+    });
+    const compileV1 = weaveEvent("weave.blueprint-compiled", {
+      weaveRunId: WeaveRunId.make("run-preserve-1"),
+      version: BlueprintVersion.make(1),
+      blueprint: v1,
+      compiledBy: "planner",
+      occurredAt: now,
+    });
+    const verified = weaveEvent("weave.node-verified", {
+      weaveRunId: WeaveRunId.make("run-preserve-1"),
+      nodeId: WeaveNodeId.make("n1"),
+      verifierOutcome: "ok",
+      occurredAt: now,
+    });
+
+    // Apply created → blueprint-compiled v1 → node-verified for n1.
+    const afterCreated = await Effect.runPromise(projectWeaveEvent(null, created));
+    const afterV1 = await Effect.runPromise(projectWeaveEvent(afterCreated, compileV1));
+    const afterVerified = await Effect.runPromise(projectWeaveEvent(afterV1, verified));
+    expect(afterVerified.nodeMeta.get(WeaveNodeId.make("n1"))?.status).toBe("verified");
+
+    // Now apply blueprint-compiled v2 with phase-planning reason (n1 still
+    // present, plus a fresh task n2 added).
+    const v2 = Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(2),
+      nodes: [
+        ...v1.nodes,
+        {
+          id: WeaveNodeId.make("n2"),
+          title: "N2",
+          description: "",
+          kind: "raw",
+          phaseId: WeavePhaseId.make("p1"),
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [WeaveNodeId.make("n1")],
+          status: "pending",
+        },
+      ],
+      phases: v1.phases,
+      contracts: [],
+      decisions: [],
+      compiledAt: now,
+      compiledBy: "phase-planning",
+    });
+    const compileV2 = weaveEvent("weave.blueprint-compiled", {
+      weaveRunId: WeaveRunId.make("run-preserve-1"),
+      version: BlueprintVersion.make(2),
+      blueprint: v2,
+      compiledBy: "phase-planning",
+      occurredAt: now,
+    });
+
+    const afterV2 = await Effect.runPromise(projectWeaveEvent(afterVerified, compileV2));
+
+    // n1's verified status survives; n2 starts at pending.
+    expect(afterV2.nodeMeta.get(WeaveNodeId.make("n1"))?.status).toBe("verified");
+    expect(afterV2.nodeMeta.get(WeaveNodeId.make("n2"))?.status).toBe("pending");
+  });
+
+  it("seeds 'pending' for every node on the very first compile (state.nodeMeta empty)", async () => {
+    const created = weaveEvent("weave.created", {
+      weaveRunId: WeaveRunId.make("run-preserve-2"),
+      projectId: ProjectId.make("project-1"),
+      title: "Test",
+      vision: "",
+      occurredAt: now,
+    });
+    const v1 = Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(1),
+      nodes: [
+        {
+          id: WeaveNodeId.make("a"),
+          title: "A",
+          description: "",
+          kind: "raw",
+          phaseId: WeavePhaseId.make("p1"),
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+        {
+          id: WeaveNodeId.make("b"),
+          title: "B",
+          description: "",
+          kind: "raw",
+          phaseId: WeavePhaseId.make("p1"),
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        { id: WeavePhaseId.make("p1"), ordinal: 0, title: "P1", description: "", approval: "pending" },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: now,
+      compiledBy: "planner",
+    });
+    const compileV1 = weaveEvent("weave.blueprint-compiled", {
+      weaveRunId: WeaveRunId.make("run-preserve-2"),
+      version: BlueprintVersion.make(1),
+      blueprint: v1,
+      compiledBy: "planner",
+      occurredAt: now,
+    });
+    const afterCreated = await Effect.runPromise(projectWeaveEvent(null, created));
+    const afterV1 = await Effect.runPromise(projectWeaveEvent(afterCreated, compileV1));
+    expect(afterV1.nodeMeta.get(WeaveNodeId.make("a"))?.status).toBe("pending");
+    expect(afterV1.nodeMeta.get(WeaveNodeId.make("b"))?.status).toBe("pending");
   });
 });
