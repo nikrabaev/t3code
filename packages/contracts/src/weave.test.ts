@@ -1063,3 +1063,37 @@ it.effect("round-trips WeaveRunProjectionSchema with populated nodeMeta entries"
     assert.strictEqual(node2?.failureReason, "Contract amendment needed");
   }),
 );
+
+import { WeaveBlueprintExtendedPayload } from "./weave.ts";
+
+const decodeWeaveBlueprintExtendedPayload = Schema.decodeUnknownEffect(WeaveBlueprintExtendedPayload);
+
+it.effect("round-trips a WeaveBlueprintExtendedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveBlueprintExtendedPayload({
+      weaveRunId: "run-1",
+      version: 2,
+      plannerNodeId: "phase-1-planner",
+      addedNodeIds: ["task-1", "task-2"],
+      occurredAt: "2026-04-30T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+    assert.strictEqual(parsed.version, 2);
+    assert.strictEqual(parsed.plannerNodeId, "phase-1-planner");
+    assert.deepStrictEqual(parsed.addedNodeIds, ["task-1", "task-2"]);
+  }),
+);
+
+it.effect("rejects a WeaveBlueprintExtendedPayload missing plannerNodeId", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWeaveBlueprintExtendedPayload({
+        weaveRunId: "run-1",
+        version: 2,
+        addedNodeIds: [],
+        occurredAt: "2026-04-30T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);

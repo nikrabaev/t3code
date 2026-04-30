@@ -395,6 +395,21 @@ export const WeaveBlueprintCompiledPayload = Schema.Struct({
 });
 export type WeaveBlueprintCompiledPayload = typeof WeaveBlueprintCompiledPayload.Type;
 
+// Emitted when a Planning Node's dispatch produces a sub-DAG appended under
+// itself. Carries the new BlueprintVersion plus the ids of the freshly added
+// Nodes so projections can incrementally apply the delta. The full new
+// Blueprint is always also emitted as a sibling weave.blueprint-compiled
+// (reason: "phase-planning") so projections never reconstruct from deltas
+// alone.
+export const WeaveBlueprintExtendedPayload = Schema.Struct({
+  weaveRunId: WeaveRunId,
+  version: BlueprintVersion,
+  plannerNodeId: WeaveNodeId,
+  addedNodeIds: Schema.Array(WeaveNodeId),
+  occurredAt: IsoDateTime,
+});
+export type WeaveBlueprintExtendedPayload = typeof WeaveBlueprintExtendedPayload.Type;
+
 export const WeaveBlueprintApprovedPayload = Schema.Struct({
   weaveRunId: WeaveRunId,
   version: BlueprintVersion,
