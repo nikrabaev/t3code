@@ -724,9 +724,9 @@ it.effect("decodes weave.blueprint-compiled event via OrchestrationEvent", () =>
   }),
 );
 
-it.effect("decodes a weave.blueprint-extended event", () =>
+it.effect("decodes a weave.blueprint-extended event via OrchestrationEvent", () =>
   Effect.gen(function* () {
-    const parsed = yield* decodeOrchestrationEvent({
+    const event = yield* decodeOrchestrationEvent({
       sequence: 1,
       eventId: "event-1",
       aggregateKind: "weave",
@@ -745,7 +745,7 @@ it.effect("decodes a weave.blueprint-extended event", () =>
         occurredAt: "2026-04-30T00:00:00.000Z",
       },
     });
-    assert.strictEqual(parsed.type, "weave.blueprint-extended");
+    assert.strictEqual(event.type, "weave.blueprint-extended");
   }),
 );
 
