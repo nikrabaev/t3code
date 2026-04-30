@@ -435,7 +435,7 @@ function findOwningNode(projection: WeaveRunProjection, threadId: ThreadId): str
 /**
  * Polls for run.status === "reviewing"; when found, dispatches
  * weave.blueprint.approve at the current Blueprint version. Stops when the
- * run is terminal (complete / failed / aborted).
+ * run is terminal (complete / aborted).
  */
 function startApprovalDriver(
   system: Awaited<ReturnType<typeof createE2ESystem>>,
