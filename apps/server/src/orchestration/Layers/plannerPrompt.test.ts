@@ -45,22 +45,28 @@ describe("buildPlannerPrompt", () => {
     expect(prompt).toContain("(empty)");
   });
 
-  it("without projectVerifierCommand, prompts the planner to infer the test runner", () => {
+  it("constrains kind to 'planning' (no other kinds)", () => {
     const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
-    expect(prompt).toContain('"verifierCommand"');
-    expect(prompt).toContain("falls back to `bun run test`");
-    expect(prompt).toContain("package.json scripts");
+    expect(prompt).toContain('"kind": "planning"');
+    expect(prompt).not.toContain('"kind": "raw"');
+    expect(prompt).not.toContain('"raw" | "scaffold"');
   });
 
-  it("with projectVerifierCommand, names the project default and asks for overrides only", () => {
-    const prompt = buildPlannerPrompt({
-      vision: "v",
-      snapshotContent: "",
-      projectVerifierCommand: "cargo test",
-    });
-    expect(prompt).toContain('"verifierCommand"');
-    expect(prompt).toContain("`cargo test`");
-    expect(prompt).toContain("ONLY when this node should be verified with a different command");
-    expect(prompt).not.toContain("falls back to `bun run test`");
+  it("requires exactly one Node per Phase", () => {
+    const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
+    expect(prompt).toMatch(/exactly one (?:Planning )?Node per Phase/i);
+  });
+
+  it("requires contracts and decisions arrays to be empty for a meta-plan", () => {
+    const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
+    expect(prompt).toMatch(/contracts.*\[\]/);
+    expect(prompt).toMatch(/decisions.*\[\]/);
+  });
+
+  it("does not mention verifierCommand (Planning Nodes are schema-verified, not command-verified)", () => {
+    const prompt = buildPlannerPrompt({ vision: "v", snapshotContent: "" });
+    expect(prompt).not.toContain("verifierCommand");
+    expect(prompt).not.toContain("bun run test");
+    expect(prompt).not.toContain("npm test");
   });
 });

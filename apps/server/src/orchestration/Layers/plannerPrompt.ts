@@ -19,31 +19,21 @@
  */
 
 /**
- * Build the structured prompt the planner sends to the LLM.
+ * Build the structured prompt the meta-planner sends to the LLM.
  *
- * @param input.projectVerifierCommand - Project-level Weave verifier default
- *   (e.g. `"npm test"`, `"cargo test"`). When provided, the planner is told
- *   this is the default and is invited to emit per-node `verifierCommand`
- *   only for nodes whose verification is *not* the project default. When
- *   absent, the planner is asked to infer an appropriate command from the
- *   codebase snapshot.
+ * Slice 2 of incremental planning: emits a meta-plan — a Blueprint with N
+ * Phases, exactly one `kind: "planning"` Node per Phase, and zero Tasks.
+ * Each Planning Node, when later dispatched (Slice 3+), will emit the rest
+ * of its Phase's sub-DAG. The meta-planner does not author contracts or
+ * decisions — those come from Phase Planners.
  */
 export function buildPlannerPrompt(input: {
   vision: string;
   snapshotContent: string;
-  projectVerifierCommand?: string;
   previousError?: string;
 }): string {
-  const projectVerifierCommand = input.projectVerifierCommand?.trim();
-  const verifierCommandSchemaLine = projectVerifierCommand
-    ? `      "verifierCommand": "<optional — omit unless this node needs a different command than the project default '${projectVerifierCommand}'>",`
-    : '      "verifierCommand": "<optional — non-empty shell command, omit to use the runtime default>",';
-  const verifierGuidanceRule = projectVerifierCommand
-    ? `- The project-level Weave verifier command is \`${projectVerifierCommand}\`. Emit \`verifierCommand\` per node ONLY when this node should be verified with a different command (e.g. a docs node verified with \`mkdocs build\`, a contract node with a typecheck-only command). Omit the field for nodes that use the project default.`
-    : "- The runtime falls back to `bun run test` if no `verifierCommand` is set. If the project uses a different test runner (e.g. `npm test`, `cargo test`, `pytest`), emit `verifierCommand` per node accordingly. Detect the project type from the codebase snapshot (package.json scripts, Cargo.toml, pyproject.toml, etc.).";
-
   const parts: string[] = [
-    "You are the Weave planner. Compile a Blueprint from the user's vision.",
+    "You are the Weave meta-planner. Compile a meta-plan Blueprint from the user's vision.",
     "",
     "OUTPUT REQUIREMENTS:",
     "- Return a single JSON object. JSON only, no prose, no markdown fences, no commentary.",
@@ -67,49 +57,30 @@ export function buildPlannerPrompt(input: {
     '  "nodes": [',
     "    {",
     '      "id": "<WeaveNodeId — non-empty string>",',
-    '      "title": "<non-empty string>",',
-    '      "description": "<string>",',
-    '      "kind": "raw" | "scaffold" | "contract" | "utility",',
-    '      "phaseId": "<must reference a phase id above>",',
+    '      "title": "<non-empty string — names the Planning Node, e.g. \\"Plan Phase 1: Scaffolding\\">",',
+    '      "description": "<string — what the Planning Node will plan>",',
+    '      "kind": "planning",',
+    '      "phaseId": "<must reference a phase id above; each phase has exactly one Planning Node>",',
     '      "scope": { "readSet": [], "writeSet": [] },',
     '      "inputContractIds": [],',
     '      "outputContractIds": [],',
-    '      "verifierDescription": "<string>",',
-    verifierCommandSchemaLine,
+    '      "verifierDescription": "<string — describe the schema/contract this Planning Node\'s emission will satisfy>",',
     '      "dependsOn": [],',
     '      "status": "pending"',
     "    }",
     "  ],",
-    '  "contracts": [',
-    "    {",
-    '      "id": "<WeaveContractId — non-empty string>",',
-    '      "ownerNodeId": "<must reference one of the node ids above>",',
-    '      "surface": "<string — Markdown-with-types describing the API surface; may be empty>",',
-    '      "semantics": "<string — Markdown describing behaviour; may be empty>"',
-    "      // conformanceTestPath is OPTIONAL — omit unless you have a concrete path",
-    "    }",
-    "  ],",
-    '  "decisions": [',
-    "    {",
-    '      "id": "<WeaveDecisionId — non-empty string>",',
-    '      "question": "<non-empty string>",',
-    '      "options": ["<string>", "<string>"],',
-    '      "blastRadiusNodeIds": ["<node id this decision affects>"]',
-    "      // preAuthScope and resolution are OPTIONAL — omit for v0.1",
-    "    }",
-    "  ]",
+    '  "contracts": [],',
+    '  "decisions": []',
     "}",
     "",
     "RULES:",
+    "- Emit exactly one Planning Node per Phase. The total nodes count MUST equal the phases count.",
+    '- Every Node MUST have `"kind": "planning"`. No other kinds are allowed in a meta-plan.',
     "- phases[].ordinal must be unique integers starting at 0.",
-    "- nodes[].phaseId must match one of the phases[].id values.",
-    "- nodes[].dependsOn must only reference node ids defined in the same nodes array.",
-    "- contracts[].ownerNodeId must reference a node id in the nodes array.",
-    "- decisions[].blastRadiusNodeIds must only reference node ids in the nodes array.",
-    '- contracts and decisions arrays MAY BE EMPTY ([]). For a simple Blueprint, emit `"contracts": []` and `"decisions": []` rather than inventing entries.',
-    "- If you DO emit a contract entry, every required field above must be present (no omissions).",
-    "- At least one phase and one node are required.",
-    verifierGuidanceRule,
+    "- Each Node's `phaseId` must match exactly one phase, and no two Nodes may share a phaseId.",
+    "- Node `scope`, `inputContractIds`, `outputContractIds`, and `dependsOn` MUST all be empty for Planning Nodes — the per-Node sub-DAG is emitted later by the Planning Node itself, not by the meta-planner.",
+    '- `contracts` and `decisions` MUST both be empty arrays (`[]`). Authoring contracts and decisions is the responsibility of Phase Planners, not the meta-planner.',
+    "- At least one phase and one Planning Node are required.",
     "",
     "USER VISION:",
     input.vision,

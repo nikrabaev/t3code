@@ -83,9 +83,6 @@ export const PlannerDriverLive = Layer.effect(
             const prompt = buildPlannerPrompt({
               vision: input.vision,
               snapshotContent: input.snapshotContent,
-              ...(input.projectVerifierCommand !== undefined
-                ? { projectVerifierCommand: input.projectVerifierCommand }
-                : {}),
               ...(input.previousError !== undefined ? { previousError: input.previousError } : {}),
             });
 

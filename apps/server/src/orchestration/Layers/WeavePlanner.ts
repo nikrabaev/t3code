@@ -102,7 +102,7 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
   const { weaveRunId, vision, snapshotContent = "", projectId, title } = event.payload;
   const correlationCommandId = event.commandId ?? undefined;
 
-  const { workspaceRoot: projectWorkspaceRoot, verifierCommand: projectVerifierCommand } =
+  const { workspaceRoot: projectWorkspaceRoot } =
     yield* resolveProjectMeta(orchestrationEngine, projectId);
 
   yield* Effect.log("WeavePlanner: compiling blueprint for run", { weaveRunId });
@@ -114,7 +114,6 @@ const processWeaveCreated = Effect.fn("WeavePlanner.processWeaveCreated")(functi
     projectWorkspaceRoot,
     vision,
     snapshotContent,
-    ...(projectVerifierCommand !== null ? { projectVerifierCommand } : {}),
   };
 
   // First attempt

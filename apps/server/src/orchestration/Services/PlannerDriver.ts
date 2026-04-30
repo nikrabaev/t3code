@@ -25,9 +25,6 @@ export interface PlannerDriverShape {
    * @param input.projectWorkspaceRoot   - cwd for the provider session.
    * @param input.vision                 - The user's stated goal.
    * @param input.snapshotContent        - Serialized codebase snapshot (may be empty).
-   * @param input.projectVerifierCommand - Project-level Weave verifier command default,
-   *                                       passed to the planner as context for emitting
-   *                                       per-node `verifierCommand` overrides.
    * @param input.previousError          - When retrying, the error from the previous attempt.
    */
   readonly compile: (input: {
@@ -37,7 +34,6 @@ export interface PlannerDriverShape {
     readonly projectWorkspaceRoot: string;
     readonly vision: string;
     readonly snapshotContent: string;
-    readonly projectVerifierCommand?: string;
     readonly previousError?: string;
   }) => Effect.Effect<string, PlannerDriverError>;
 }
