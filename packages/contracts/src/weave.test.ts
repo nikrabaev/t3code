@@ -1097,3 +1097,38 @@ it.effect("rejects a WeaveBlueprintExtendedPayload missing plannerNodeId", () =>
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+import { WeaveBlueprintExtendCommand } from "./weave.ts";
+
+const decodeWeaveBlueprintExtendCommand = Schema.decodeUnknownEffect(WeaveBlueprintExtendCommand);
+const decodeWeaveInternalCommand = Schema.decodeUnknownEffect(WeaveInternalCommand);
+
+it.effect("round-trips a WeaveBlueprintExtendCommand", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveBlueprintExtendCommand({
+      type: "weave.blueprint.extend",
+      commandId: "cmd-1",
+      weaveRunId: "run-1",
+      plannerNodeId: "phase-1-planner",
+      addedNodeIds: ["task-1"],
+      createdAt: "2026-04-30T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.blueprint.extend");
+    assert.strictEqual(parsed.plannerNodeId, "phase-1-planner");
+    assert.deepStrictEqual(parsed.addedNodeIds, ["task-1"]);
+  }),
+);
+
+it.effect("WeaveInternalCommand union accepts weave.blueprint.extend", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveInternalCommand({
+      type: "weave.blueprint.extend",
+      commandId: "cmd-2",
+      weaveRunId: "run-1",
+      plannerNodeId: "phase-1-planner",
+      addedNodeIds: [],
+      createdAt: "2026-04-30T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.blueprint.extend");
+  }),
+);

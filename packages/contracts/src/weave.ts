@@ -354,11 +354,25 @@ export const WeaveNodeFailedCommand = Schema.Struct({
 });
 export type WeaveNodeFailedCommand = typeof WeaveNodeFailedCommand.Type;
 
+// Internal command emitted when a Planning Node's dispatch produces a valid
+// sub-DAG. Causes the decider to bump BlueprintVersion and append the listed
+// Nodes under the planner. Server-only; not accepted from the client.
+export const WeaveBlueprintExtendCommand = Schema.Struct({
+  type: Schema.Literal("weave.blueprint.extend"),
+  commandId: CommandId,
+  weaveRunId: WeaveRunId,
+  plannerNodeId: WeaveNodeId,
+  addedNodeIds: Schema.Array(WeaveNodeId),
+  createdAt: IsoDateTime,
+});
+export type WeaveBlueprintExtendCommand = typeof WeaveBlueprintExtendCommand.Type;
+
 export const WeaveInternalCommand = Schema.Union([
   WeaveBlueprintCompileCommand,
   WeaveNodeDispatchCommand,
   WeaveNodeVerifiedCommand,
   WeaveNodeFailedCommand,
+  WeaveBlueprintExtendCommand,
 ]);
 export type WeaveInternalCommand = typeof WeaveInternalCommand.Type;
 
