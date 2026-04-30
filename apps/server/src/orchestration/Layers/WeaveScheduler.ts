@@ -3,7 +3,7 @@
  *
  * Processing loop (per weave.blueprint-approved or weave.node-verified event):
  *  1. Fetch the current WeaveRunProjection.
- *  2. Compute ready set: nodes in "pending" status whose dependsOn are all "verified".
+ *  2. Compute ready set: pending nodes whose readiness check passes (kind-aware — see `computeReadySet`).
  *  3. Pick next by phase ordinal ascending, node-id tiebreak.
  *  4. Allocate a worktree via GitCore.createWorktree on a new branch off "main".
  *  5. Create a child thread via OrchestrationEngineService.dispatch("thread.create").
