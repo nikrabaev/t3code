@@ -304,4 +304,62 @@ describe("ws.weave RPC integration", () => {
       }
     });
   });
+
+  describe("weave.delete dispatch removes the run from the read model", () => {
+    it("dispatches weave.delete and the projection becomes null", async () => {
+      const system = await createOrchestrationSystem();
+      try {
+        const weaveRunId = WeaveRunId.make("delete-test-run");
+        const projectId = ProjectId.make("delete-test-project");
+
+        await system.run(
+          system.engine.dispatch({
+            type: "weave.create",
+            commandId: CommandId.make("cmd-create-del"),
+            weaveRunId,
+            projectId,
+            title: "To be deleted",
+            vision: "",
+            createdAt: now(),
+          }),
+        );
+
+        const before = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
+        expect(before).not.toBeNull();
+
+        const result = await system.run(
+          system.engine.dispatch({
+            type: "weave.delete",
+            commandId: CommandId.make("cmd-delete"),
+            weaveRunId,
+            createdAt: now(),
+          }),
+        );
+        expect(result.sequence).toBeGreaterThan(0);
+
+        const after = await system.run(system.weaveEngine.getWeaveRun(weaveRunId));
+        expect(after).toBeNull();
+      } finally {
+        await system.dispose();
+      }
+    });
+
+    it("rejects weave.delete for a non-existent run", async () => {
+      const system = await createOrchestrationSystem();
+      try {
+        await expect(
+          system.run(
+            system.engine.dispatch({
+              type: "weave.delete",
+              commandId: CommandId.make("cmd-delete-missing"),
+              weaveRunId: WeaveRunId.make("never-existed"),
+              createdAt: now(),
+            }),
+          ),
+        ).rejects.toThrow();
+      } finally {
+        await system.dispose();
+      }
+    });
+  });
 });

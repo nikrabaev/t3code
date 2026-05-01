@@ -328,6 +328,14 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 threadId: event.payload.threadId,
               }),
             );
+          case "weave.deleted":
+            return Effect.succeed(
+              Option.some({
+                kind: "weave-run-removed" as const,
+                sequence: event.sequence,
+                weaveRunId: event.payload.weaveRunId,
+              }),
+            );
           default:
             if (event.aggregateKind === "weave") {
               return orchestrationEngine.getReadModel().pipe(
