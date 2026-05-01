@@ -169,6 +169,23 @@ export function decideWeaveCommand(input: {
         ];
       });
     }
+    case "weave.delete": {
+      return Effect.gen(function* () {
+        yield* requireRun({ projection, command });
+        return [
+          envelope({
+            type: "weave.deleted",
+            weaveRunId: command.weaveRunId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+            payload: {
+              weaveRunId: command.weaveRunId,
+              occurredAt: command.createdAt,
+            },
+          }),
+        ];
+      });
+    }
     case "weave.node.dispatch": {
       return Effect.gen(function* () {
         const run = yield* requireRun({ projection, command });

@@ -302,6 +302,63 @@ describe("decideWeaveCommand — weave.exit", () => {
   });
 });
 
+describe("decideWeaveCommand — weave.delete", () => {
+  it("emits weave.deleted when run exists", async () => {
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: emptyProjection(),
+        command: {
+          type: "weave.delete",
+          commandId: CommandId.make("cmd-del"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.deleted");
+    expect(events[0]?.aggregateKind).toBe("weave");
+    expect(events[0]?.aggregateId).toBe(WeaveRunId.make("run-1"));
+  });
+
+  it("emits weave.deleted even when run is in a terminal state", async () => {
+    const base = emptyProjection();
+    const terminal: WeaveRunProjection = {
+      ...base,
+      run: { ...base.run, status: "complete" },
+    };
+    const events = await Effect.runPromise(
+      decideWeaveCommand({
+        projection: terminal,
+        command: {
+          type: "weave.delete",
+          commandId: CommandId.make("cmd-del-terminal"),
+          weaveRunId: WeaveRunId.make("run-1"),
+          createdAt: now,
+        },
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("weave.deleted");
+  });
+
+  it("rejects weave.delete when run does not exist", async () => {
+    await expect(
+      Effect.runPromise(
+        decideWeaveCommand({
+          projection: null,
+          command: {
+            type: "weave.delete",
+            commandId: CommandId.make("cmd-del-missing"),
+            weaveRunId: WeaveRunId.make("run-missing"),
+            createdAt: now,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
 describe("decideWeaveCommand — weave.node.dispatch", () => {
   it("emits weave.node-dispatched when node is ready and has no ancestors", async () => {
     const p = buildRunningProjection({

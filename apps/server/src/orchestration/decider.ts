@@ -752,6 +752,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "weave.phase.approve":
     case "weave.decision.resolve":
     case "weave.exit":
+    case "weave.delete":
     case "weave.blueprint.compile":
     case "weave.node.dispatch":
     case "weave.node.verified":
