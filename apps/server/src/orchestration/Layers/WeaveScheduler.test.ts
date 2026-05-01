@@ -19,6 +19,7 @@ import {
   EventId,
   ProjectId,
   ThreadId,
+  WeaveNode,
   WeaveNodeId,
   WeavePhaseId,
   WeaveRunId,
@@ -1038,24 +1039,7 @@ describe("formatPlanningNodeSpec", () => {
   function makePlanningNode(params: { id?: string; phaseId?: string; description?: string } = {}) {
     const phaseId = WeavePhaseId.make(params.phaseId ?? "phase-1");
     const nodeId = WeaveNodeId.make(params.id ?? "plan-phase-1");
-    return Schema.decodeSync(
-      Schema.Struct({
-        id: WeaveNodeId,
-        title: Schema.String,
-        description: Schema.String,
-        kind: Schema.Literal("planning"),
-        phaseId: WeavePhaseId,
-        scope: Schema.Struct({
-          readSet: Schema.Array(Schema.String),
-          writeSet: Schema.Array(Schema.String),
-        }),
-        inputContractIds: Schema.Array(Schema.String),
-        outputContractIds: Schema.Array(Schema.String),
-        verifierDescription: Schema.String,
-        dependsOn: Schema.Array(WeaveNodeId),
-        status: Schema.Literal("pending"),
-      }),
-    )({
+    return Schema.decodeSync(WeaveNode)({
       id: nodeId,
       title: "Plan Phase 1",
       description: params.description ?? "Plan the scaffolding sub-tasks for Phase 1",
