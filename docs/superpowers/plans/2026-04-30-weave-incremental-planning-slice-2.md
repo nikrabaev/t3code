@@ -35,17 +35,17 @@
 
 ## File structure
 
-| File | Change |
-|---|---|
-| `apps/server/src/orchestration/Layers/plannerPrompt.ts` | Replace the Blueprint schema example to constrain `kind` to `"planning"` only; add the "exactly one Node per Phase" rule; remove the verifierCommand guidance and the `projectVerifierCommand` parameter (Planning Nodes are not verified by command); update verifierDescription guidance to describe the JSON-schema validation responsibility. |
-| `apps/server/src/orchestration/Layers/plannerPrompt.test.ts` | Update tests to assert the new prompt shape: mentions `"planning"`, mentions "exactly one", omits `"raw" \| "scaffold" \| "contract" \| "utility"`, omits the runtime-default verifier-command sentence. Delete the two `projectVerifierCommand` tests. |
-| `apps/server/src/orchestration/Layers/PlannerDriver.ts` | Drop the `projectVerifierCommand` conditional from the `buildPlannerPrompt` call. |
-| `apps/server/src/orchestration/Services/PlannerDriver.ts` | Drop `projectVerifierCommand?: string` from the `compile` input record and the matching JSDoc line. |
-| `apps/server/src/orchestration/Layers/WeavePlanner.ts` | Drop the `verifierCommand` destructure from `resolveProjectMeta`'s caller and the conditional spread into `compileInput`. The `resolveProjectMeta` helper itself is left alone (its `verifierCommand` field is harmless dead). |
-| `apps/server/src/orchestration/Layers/WeavePlanner.test.ts` | Update the `makeValidBlueprint` helper to produce a meta-plan shape (one Phase, one Planning Node). Add an assertion in the happy-path test that `kind === "planning"`. |
-| `apps/server/src/orchestration/weaveProjector.ts` | Add `planningDepthCap: 3 as never` in the `weave.created` arm; add `planningDepthCap` to the `createEmptyWeaveProjection` params. |
-| `apps/server/src/orchestration/weaveProjector.test.ts` | Add an assertion that `result.run.planningDepthCap === 3` after `weave.created`. |
-| `apps/server/src/orchestration/weaveIntegration.test.ts` | Wrap the existing failing `it(...)` with `it.skip(...)` and document why with a comment that names this slice and Slice 3. |
+| File                                                         | Change                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/src/orchestration/Layers/plannerPrompt.ts`      | Replace the Blueprint schema example to constrain `kind` to `"planning"` only; add the "exactly one Node per Phase" rule; remove the verifierCommand guidance and the `projectVerifierCommand` parameter (Planning Nodes are not verified by command); update verifierDescription guidance to describe the JSON-schema validation responsibility. |
+| `apps/server/src/orchestration/Layers/plannerPrompt.test.ts` | Update tests to assert the new prompt shape: mentions `"planning"`, mentions "exactly one", omits `"raw" \| "scaffold" \| "contract" \| "utility"`, omits the runtime-default verifier-command sentence. Delete the two `projectVerifierCommand` tests.                                                                                           |
+| `apps/server/src/orchestration/Layers/PlannerDriver.ts`      | Drop the `projectVerifierCommand` conditional from the `buildPlannerPrompt` call.                                                                                                                                                                                                                                                                 |
+| `apps/server/src/orchestration/Services/PlannerDriver.ts`    | Drop `projectVerifierCommand?: string` from the `compile` input record and the matching JSDoc line.                                                                                                                                                                                                                                               |
+| `apps/server/src/orchestration/Layers/WeavePlanner.ts`       | Drop the `verifierCommand` destructure from `resolveProjectMeta`'s caller and the conditional spread into `compileInput`. The `resolveProjectMeta` helper itself is left alone (its `verifierCommand` field is harmless dead).                                                                                                                    |
+| `apps/server/src/orchestration/Layers/WeavePlanner.test.ts`  | Update the `makeValidBlueprint` helper to produce a meta-plan shape (one Phase, one Planning Node). Add an assertion in the happy-path test that `kind === "planning"`.                                                                                                                                                                           |
+| `apps/server/src/orchestration/weaveProjector.ts`            | Add `planningDepthCap: 3 as never` in the `weave.created` arm; add `planningDepthCap` to the `createEmptyWeaveProjection` params.                                                                                                                                                                                                                 |
+| `apps/server/src/orchestration/weaveProjector.test.ts`       | Add an assertion that `result.run.planningDepthCap === 3` after `weave.created`.                                                                                                                                                                                                                                                                  |
+| `apps/server/src/orchestration/weaveIntegration.test.ts`     | Wrap the existing failing `it(...)` with `it.skip(...)` and document why with a comment that names this slice and Slice 3.                                                                                                                                                                                                                        |
 
 `Layers/WeavePlanner.ts`'s loop logic (compile → decode → persist or abort) is correct for both the v0.1 monolithic Blueprint and the new meta-plan Blueprint — the only thing that differs is the prompt body and the dropped `projectVerifierCommand` plumbing. No rename in this slice.
 
@@ -54,6 +54,7 @@
 ## Task 1: Update the planner prompt to emit Planning Nodes only
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/plannerPrompt.test.ts`
 - Modify: `apps/server/src/orchestration/Layers/plannerPrompt.ts`
 
@@ -183,7 +184,7 @@ export function buildPlannerPrompt(input: {
     "- phases[].ordinal must be unique integers starting at 0.",
     "- Each Node's `phaseId` must match exactly one phase, and no two Nodes may share a phaseId.",
     "- Node `scope`, `inputContractIds`, `outputContractIds`, and `dependsOn` MUST all be empty for Planning Nodes — the per-Node sub-DAG is emitted later by the Planning Node itself, not by the meta-planner.",
-    '- `contracts` and `decisions` MUST both be empty arrays (`[]`). Authoring contracts and decisions is the responsibility of Phase Planners, not the meta-planner.',
+    "- `contracts` and `decisions` MUST both be empty arrays (`[]`). Authoring contracts and decisions is the responsibility of Phase Planners, not the meta-planner.",
     "- At least one phase and one Planning Node are required.",
     "",
     "USER VISION:",
@@ -209,10 +210,10 @@ export function buildPlannerPrompt(input: {
 
 b) `apps/server/src/orchestration/Layers/plannerPrompt.test.ts`: delete the two tests that reference `projectVerifierCommand`:
 
-  - `"without projectVerifierCommand, prompts the planner to infer the test runner"`
-  - `"with projectVerifierCommand, names the project default and asks for overrides only"`
+- `"without projectVerifierCommand, prompts the planner to infer the test runner"`
+- `"with projectVerifierCommand, names the project default and asks for overrides only"`
 
-  These test behaviors that no longer exist.
+These test behaviors that no longer exist.
 
 c) `apps/server/src/orchestration/Layers/PlannerDriver.ts`: simplify the `buildPlannerPrompt` call site (around line 83–90). Replace:
 
@@ -241,34 +242,34 @@ d) `apps/server/src/orchestration/Services/PlannerDriver.ts`: remove the `projec
 
 e) `apps/server/src/orchestration/Layers/WeavePlanner.ts`:
 
-  - Around line 105, replace:
+- Around line 105, replace:
 
-    ```ts
-    const { workspaceRoot: projectWorkspaceRoot, verifierCommand: projectVerifierCommand } =
-      yield* resolveProjectMeta(orchestrationEngine, projectId);
-    ```
+  ```ts
+  const { workspaceRoot: projectWorkspaceRoot, verifierCommand: projectVerifierCommand } =
+    yield * resolveProjectMeta(orchestrationEngine, projectId);
+  ```
 
-    with:
+  with:
 
-    ```ts
-    const { workspaceRoot: projectWorkspaceRoot } =
-      yield* resolveProjectMeta(orchestrationEngine, projectId);
-    ```
+  ```ts
+  const { workspaceRoot: projectWorkspaceRoot } =
+    yield * resolveProjectMeta(orchestrationEngine, projectId);
+  ```
 
-  - Around line 110–118, simplify the `compileInput` to drop the conditional spread:
+- Around line 110–118, simplify the `compileInput` to drop the conditional spread:
 
-    ```ts
-    const compileInput = {
-      weaveRunId,
-      projectId,
-      parentThreadTitle: title,
-      projectWorkspaceRoot,
-      vision,
-      snapshotContent,
-    };
-    ```
+  ```ts
+  const compileInput = {
+    weaveRunId,
+    projectId,
+    parentThreadTitle: title,
+    projectWorkspaceRoot,
+    vision,
+    snapshotContent,
+  };
+  ```
 
-  - `resolveProjectMeta` (around line 81–91) still returns `verifierCommand` — that's fine, it's a private helper and the dead field can be left for now. (If a code-quality pass also wants to trim it, do that as a follow-up — out of scope for this task.)
+- `resolveProjectMeta` (around line 81–91) still returns `verifierCommand` — that's fine, it's a private helper and the dead field can be left for now. (If a code-quality pass also wants to trim it, do that as a follow-up — out of scope for this task.)
 
 - [ ] **Step 4: Run the tests and watch them pass**
 
@@ -297,6 +298,7 @@ git commit -m "feat(weave): meta-planner prompt emits Planning Nodes only"
 ## Task 2: Update WeavePlanner test fixture to use meta-plan shape
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/WeavePlanner.test.ts:36-70` (`makeValidBlueprint`)
 - Modify: `apps/server/src/orchestration/Layers/WeavePlanner.test.ts` (the happy-path assertion in the first `it(...)` block)
 
@@ -383,6 +385,7 @@ git commit -m "test(weave): planner test fixture uses Planning Node shape"
 ## Task 3: Default `planningDepthCap` to 3 at `weave.created` time
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts` (lines 36–69 for the helper and 78–113 for the `weave.created` arm)
 - Modify: `apps/server/src/orchestration/weaveProjector.test.ts` (the `weave.created` arm tests around line 42)
 
@@ -505,6 +508,7 @@ git commit -m "feat(weave): default planningDepthCap to 3 at create time"
 ## Task 4: Skip `weaveIntegration.test.ts` until Slice 3 wires the runtime
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveIntegration.test.ts`
 
 This test has been failing since commit `040f979f` (the conformer's verifier signal changed from `"bun run test"` to `"npm run test"` — a pre-Slice-1 regression). Slice 2 makes it irreparable in its current form anyway, because the meta-plan blueprint now contains Planning Nodes that the scheduler/conformer cannot dispatch (Slice 3 territory). The cleanest move for Slice 2 is to mark it skipped with a clear note.

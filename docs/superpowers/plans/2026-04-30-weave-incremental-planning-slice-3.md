@@ -40,18 +40,18 @@
 
 ## File structure
 
-| File | Change |
-|---|---|
-| `packages/contracts/src/weave.ts` | Replace `addedNodeIds: Schema.Array(WeaveNodeId)` on `WeaveBlueprintExtendCommand` with `addedNodes: Schema.Array(WeaveNode)`. Extend `BlueprintSource` literal to include `"phase-planning"` (Slice 1 added this to `WeaveBlueprintCompileReason` but missed `BlueprintSource`; the decider in Task 2 needs both). Add new `PhasePlannerOutput` struct (a single field `addedNodes: Schema.Array(WeaveNode)`). |
-| `packages/contracts/src/weave.test.ts` | Update the existing two `WeaveBlueprintExtendCommand` tests for the new field name. Add a new test for the extended `BlueprintSource` union. Add positive + negative tests for `PhasePlannerOutput`. |
-| `apps/server/src/orchestration/weaveDecider.ts` | Replace the Slice 1 no-op `case "weave.blueprint.extend"` (lines 425–430) with a real handler that validates the planner node (kind=planning, status=running), validates `addedNodes` (no planning kinds, all phaseId === planner.phaseId, fresh ids), builds the new Blueprint, and emits `weave.node-verified` + `weave.blueprint-extended` + `weave.blueprint-compiled`. |
-| `apps/server/src/orchestration/weaveDecider.test.ts` | Add a new `describe("decideWeaveCommand — weave.blueprint.extend", …)` block with happy-path + each rejection case. |
-| `apps/server/src/orchestration/weaveProjector.ts` | Promote the Slice 1 no-op `case "weave.blueprint-extended"` (lines 355–367) to a real handler. Body: same null-state guard already there; on non-null state, return state unchanged with an `Effect.log` note. (The sister `weave.blueprint-compiled` event mutates state.) |
-| `apps/server/src/orchestration/weaveProjector.test.ts` | Add a new `describe("projectWeaveEvent — weave.blueprint-extended", …)` block: rejects null state, returns unchanged on non-null state, replays cleanly with `weave.blueprint-compiled`. |
-| `apps/server/src/orchestration/Layers/plannerPrompt.ts` | Add a new exported `buildPhasePlannerPrompt(input)` function next to `buildPlannerPrompt`. Constrains output to `PhasePlannerOutput` JSON shape. |
-| `apps/server/src/orchestration/Layers/plannerPrompt.test.ts` | Add a new `describe("buildPhasePlannerPrompt", …)` block asserting the prompt's required-content. |
-| `apps/server/src/orchestration/Layers/WeaveContractConformer.ts` | Branch on `match.node.kind`: for `"planning"`, run the new schema-validation path; for everything else, run the existing command-verifier path. New helper `processPlanningNode` reads the thread's `messages` from the read model, concatenates assistant text, parses + validates, and dispatches. |
-| `apps/server/src/orchestration/Layers/WeaveContractConformer.test.ts` | Add a new `describe("WeaveContractConformer — planning kind", …)` block: happy path (valid JSON → `weave.blueprint.extend` dispatched), bad JSON (parse failure → `weave.node.failed`), wrong shape (schema failure → `weave.node.failed`). |
+| File                                                                  | Change                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/src/weave.ts`                                     | Replace `addedNodeIds: Schema.Array(WeaveNodeId)` on `WeaveBlueprintExtendCommand` with `addedNodes: Schema.Array(WeaveNode)`. Extend `BlueprintSource` literal to include `"phase-planning"` (Slice 1 added this to `WeaveBlueprintCompileReason` but missed `BlueprintSource`; the decider in Task 2 needs both). Add new `PhasePlannerOutput` struct (a single field `addedNodes: Schema.Array(WeaveNode)`). |
+| `packages/contracts/src/weave.test.ts`                                | Update the existing two `WeaveBlueprintExtendCommand` tests for the new field name. Add a new test for the extended `BlueprintSource` union. Add positive + negative tests for `PhasePlannerOutput`.                                                                                                                                                                                                            |
+| `apps/server/src/orchestration/weaveDecider.ts`                       | Replace the Slice 1 no-op `case "weave.blueprint.extend"` (lines 425–430) with a real handler that validates the planner node (kind=planning, status=running), validates `addedNodes` (no planning kinds, all phaseId === planner.phaseId, fresh ids), builds the new Blueprint, and emits `weave.node-verified` + `weave.blueprint-extended` + `weave.blueprint-compiled`.                                     |
+| `apps/server/src/orchestration/weaveDecider.test.ts`                  | Add a new `describe("decideWeaveCommand — weave.blueprint.extend", …)` block with happy-path + each rejection case.                                                                                                                                                                                                                                                                                             |
+| `apps/server/src/orchestration/weaveProjector.ts`                     | Promote the Slice 1 no-op `case "weave.blueprint-extended"` (lines 355–367) to a real handler. Body: same null-state guard already there; on non-null state, return state unchanged with an `Effect.log` note. (The sister `weave.blueprint-compiled` event mutates state.)                                                                                                                                     |
+| `apps/server/src/orchestration/weaveProjector.test.ts`                | Add a new `describe("projectWeaveEvent — weave.blueprint-extended", …)` block: rejects null state, returns unchanged on non-null state, replays cleanly with `weave.blueprint-compiled`.                                                                                                                                                                                                                        |
+| `apps/server/src/orchestration/Layers/plannerPrompt.ts`               | Add a new exported `buildPhasePlannerPrompt(input)` function next to `buildPlannerPrompt`. Constrains output to `PhasePlannerOutput` JSON shape.                                                                                                                                                                                                                                                                |
+| `apps/server/src/orchestration/Layers/plannerPrompt.test.ts`          | Add a new `describe("buildPhasePlannerPrompt", …)` block asserting the prompt's required-content.                                                                                                                                                                                                                                                                                                               |
+| `apps/server/src/orchestration/Layers/WeaveContractConformer.ts`      | Branch on `match.node.kind`: for `"planning"`, run the new schema-validation path; for everything else, run the existing command-verifier path. New helper `processPlanningNode` reads the thread's `messages` from the read model, concatenates assistant text, parses + validates, and dispatches.                                                                                                            |
+| `apps/server/src/orchestration/Layers/WeaveContractConformer.test.ts` | Add a new `describe("WeaveContractConformer — planning kind", …)` block: happy path (valid JSON → `weave.blueprint.extend` dispatched), bad JSON (parse failure → `weave.node.failed`), wrong shape (schema failure → `weave.node.failed`).                                                                                                                                                                     |
 
 `weaveCommandInvariants.ts` is **not** modified in this slice — every requirement is enforced inline in the new decider arm. Adding a `requirePlanningNodeKind` helper is a tempting refactor but would unnecessarily widen the touch surface; do it in a follow-up if the same check appears in a third place.
 
@@ -64,13 +64,14 @@
 ## Task 1: Schema deltas — `WeaveBlueprintExtendCommand`, `PhasePlannerOutput`, extend `BlueprintSource`
 
 **Files:**
+
 - Modify: `packages/contracts/src/weave.ts` (the `WeaveBlueprintExtendCommand` struct, the `BlueprintSource` literal, and add new schema)
 - Modify: `packages/contracts/src/weave.test.ts` (lines 1103–1135 — update existing tests; append new ones)
 
 This task lands three schema changes at once because the decider in Task 2 depends on all of them being present:
 
 1. **Replace `addedNodeIds: Schema.Array(WeaveNodeId)` with `addedNodes: Schema.Array(WeaveNode)`** on `WeaveBlueprintExtendCommand`. The decider arm (Task 2) needs the actual node payloads to append to the Blueprint. The event payload (`WeaveBlueprintExtendedPayload`) keeps `addedNodeIds` — the event is a delta for audit/UI; the sister `weave.blueprint-compiled` event carries the full Blueprint.
-2. **Extend `BlueprintSource`** from `"planner" | "amendment" | "redesign"` to also include `"phase-planning"`. Slice 1 already added `"phase-planning"` to `WeaveBlueprintCompileReason` (a different type — the *command's* `reason`), but `BlueprintSource` (the *Blueprint struct's* `compiledBy`) was not updated. The `weave.blueprint-compiled` event emitted by Task 2's decider arm needs to set `compiledBy: "phase-planning"` on both the new Blueprint struct and the event payload, so the literal must exist.
+2. **Extend `BlueprintSource`** from `"planner" | "amendment" | "redesign"` to also include `"phase-planning"`. Slice 1 already added `"phase-planning"` to `WeaveBlueprintCompileReason` (a different type — the _command's_ `reason`), but `BlueprintSource` (the _Blueprint struct's_ `compiledBy`) was not updated. The `weave.blueprint-compiled` event emitted by Task 2's decider arm needs to set `compiledBy: "phase-planning"` on both the new Blueprint struct and the event payload, so the literal must exist.
 3. **Add `PhasePlannerOutput`** — the JSON shape a Phase Planner agent emits. Reusable both in the conformer (Task 5) and any future server-side Phase Planner driver.
 
 - [ ] **Step 1: Update the existing `WeaveBlueprintExtendCommand` tests to use `addedNodes` instead of `addedNodeIds`**
@@ -300,6 +301,7 @@ git commit -m "feat(weave): slice 3 schema deltas — extend command addedNodes,
 ## Task 2: Implement the `weave.blueprint.extend` decider arm
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveDecider.ts:425-430` (replace the Slice 1 no-op)
 - Modify: `apps/server/src/orchestration/weaveDecider.test.ts` (append new describe block)
 
@@ -404,7 +406,10 @@ describe("decideWeaveCommand — weave.blueprint.extend", () => {
     });
 
     // blueprint-compiled carries the full new Blueprint at the new version
-    const compiledPayload = events[2]?.payload as { version: number; blueprint: { version: number; nodes: ReadonlyArray<{ id: string }>; compiledBy: string } };
+    const compiledPayload = events[2]?.payload as {
+      version: number;
+      blueprint: { version: number; nodes: ReadonlyArray<{ id: string }>; compiledBy: string };
+    };
     expect(compiledPayload.version).toBe(2);
     expect(compiledPayload.blueprint.version).toBe(2);
     expect(compiledPayload.blueprint.compiledBy).toBe("phase-planning");
@@ -728,6 +733,7 @@ git commit -m "feat(weave): real decider arm for weave.blueprint.extend"
 ## Task 3: Implement the `weave.blueprint-extended` projector arm
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/weaveProjector.ts:355-368` (replace the Slice 1 no-op)
 - Modify: `apps/server/src/orchestration/weaveProjector.test.ts` (append new describe block)
 
@@ -851,12 +857,14 @@ git commit -m "feat(weave): real projector arm for weave.blueprint-extended"
 ## Task 4: Add `buildPhasePlannerPrompt`
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/plannerPrompt.ts` (append new function next to `buildPlannerPrompt`)
 - Modify: `apps/server/src/orchestration/Layers/plannerPrompt.test.ts` (add new describe block)
 
 The Phase Planner agent runs once per Planning Node dispatch. It sees: the parent Vision, the codebase snapshot, the parent Phase's metadata, the in-progress Blueprint at the time of dispatch, and the planner node's own description. It emits a JSON object matching `PhasePlannerOutput` (Task 1's schema).
 
 Slice 3's prompt is constrained to:
+
 - Output `PhasePlannerOutput` shape (`{ "addedNodes": [...] }`).
 - Every emitted node must have `phaseId === <plannerPhaseId>` and `status: "pending"`.
 - No emitted node may have `kind: "planning"` (Slice 3 simplification).
@@ -1043,6 +1051,7 @@ git commit -m "feat(weave): add buildPhasePlannerPrompt"
 ## Task 5: Conformer `kind === "planning"` schema-validation path
 
 **Files:**
+
 - Modify: `apps/server/src/orchestration/Layers/WeaveContractConformer.ts` (extend `processItem`)
 - Modify: `apps/server/src/orchestration/Layers/WeaveContractConformer.test.ts` (append new describe block)
 
@@ -1263,11 +1272,11 @@ describe("WeaveContractConformer — planning kind", () => {
         Effect.map((chunk) => Array.from(chunk)),
       ),
     );
-    const extendedEvent = allEvents.find(
-      (e) => e.type === "weave.blueprint-extended",
-    );
+    const extendedEvent = allEvents.find((e) => e.type === "weave.blueprint-extended");
     expect(extendedEvent).toBeDefined();
-    const extendedPayload = (extendedEvent as { payload: { plannerNodeId: string; addedNodeIds: ReadonlyArray<string> } }).payload;
+    const extendedPayload = (
+      extendedEvent as { payload: { plannerNodeId: string; addedNodeIds: ReadonlyArray<string> } }
+    ).payload;
     expect(extendedPayload.plannerNodeId).toBe(nodeId);
     expect(extendedPayload.addedNodeIds).toEqual(["task-1"]);
 
@@ -1471,7 +1480,7 @@ describe("WeaveContractConformer — planning kind", () => {
 });
 ```
 
-⚠️ **Caveat: scheduler dispatches every node uniformly today.** The Slice 1/2 scheduler doesn't yet know about `kind === "planning"` — it dispatches Planning Nodes the same way it dispatches Tasks (allocating a worktree, creating a child thread, starting a turn). That's exactly what we need for these tests, because we just want a child thread to exist so the conformer has something to inspect. The scheduler's *real* Planning Node trigger (auto-dispatch on `weave.blueprint-approved` for Phase N+1) lands in Slice 4. For Slice 3, the existing dispatch path is sufficient: the scheduler dispatches the planning node (treating it like any other), and the conformer's new branch takes over post-quiesce.
+⚠️ **Caveat: scheduler dispatches every node uniformly today.** The Slice 1/2 scheduler doesn't yet know about `kind === "planning"` — it dispatches Planning Nodes the same way it dispatches Tasks (allocating a worktree, creating a child thread, starting a turn). That's exactly what we need for these tests, because we just want a child thread to exist so the conformer has something to inspect. The scheduler's _real_ Planning Node trigger (auto-dispatch on `weave.blueprint-approved` for Phase N+1) lands in Slice 4. For Slice 3, the existing dispatch path is sufficient: the scheduler dispatches the planning node (treating it like any other), and the conformer's new branch takes over post-quiesce.
 
 If the scheduler's existing path includes worktree allocation that the stub `GitCore` expects, those calls still fire (as they do for `kind: "raw"`). The stub at the top of this test file (`makeStubGitCore`) already handles `createWorktree`, so this just works. The verifier-running step that the conformer would trigger for Tasks is the part that gets skipped by the new kind-stratified branch.
 
@@ -1526,16 +1535,18 @@ c) In both `findWeaveNodeForThread` and `findWeaveNodeById`, populate `nodeKind:
 d) Inside `processItem`, after the existing match/status guard (around line 224), branch on kind:
 
 ```ts
-const { weaveRunId, nodeId, threadId, worktreePath, projectId, nodeKind, nodeVerifierCommand } = match;
+const { weaveRunId, nodeId, threadId, worktreePath, projectId, nodeKind, nodeVerifierCommand } =
+  match;
 
 if (nodeKind === "planning") {
-  yield* processPlanningNode({
-    weaveRunId,
-    nodeId,
-    threadId,
-    readModel,
-    weaveEngine,
-  });
+  yield *
+    processPlanningNode({
+      weaveRunId,
+      nodeId,
+      threadId,
+      readModel,
+      weaveEngine,
+    });
   return;
 }
 
@@ -1561,7 +1572,9 @@ function processPlanningNode(params: {
     }>;
   };
   readonly weaveEngine: {
-    readonly dispatchWeaveCommand: (cmd: WeaveCommand) => Effect.Effect<unknown, OrchestrationDispatchError>;
+    readonly dispatchWeaveCommand: (
+      cmd: WeaveCommand,
+    ) => Effect.Effect<unknown, OrchestrationDispatchError>;
   };
 }): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
@@ -1684,7 +1697,7 @@ If TS errors appear in places that constructed `WeaveBlueprintExtendCommand` wit
 grep -rn "addedNodeIds" packages/contracts/src apps/server/src
 ```
 
-Every remaining reference outside the *event payload* (`WeaveBlueprintExtendedPayload.addedNodeIds`, which is correct) is suspect.
+Every remaining reference outside the _event payload_ (`WeaveBlueprintExtendedPayload.addedNodeIds`, which is correct) is suspect.
 
 - [ ] **Step 2: Repo-wide tests**
 
@@ -1693,6 +1706,7 @@ Run: `bun run test`
 Expected: tests for `weave.test.ts`, `plannerPrompt.test.ts`, `weaveDecider.test.ts`, `weaveProjector.test.ts`, `WeaveContractConformer.test.ts` all pass with the new assertions.
 
 The expected baseline shift relative to Slice 2:
+
 - Slice 2 actual: 1006 passed / 5 skipped / 6 failed.
 - Slice 3 expected: ≥1020 passed / 5 skipped / 6 failed (the 6 GitManager network-timeout failures remain pre-existing; the new tests in Tasks 1–5 add roughly 14–18 passing tests).
 
@@ -1739,7 +1753,7 @@ Run through this once Task 6 is done.
   - Conformer kind='planning' schema-validation path → Task 5
   - Whole-repo gates → Task 6
 
-- **No placeholder language.** The plan should contain no `TBD`, `TODO`, "implement later," or vague "add validation"-style steps. Task 5's three test bodies are *sketches with explicit acknowledgment* — the implementer is told exactly which existing test patterns to mirror, and the conditions under which to escalate. That's intentional honest scope, not a placeholder.
+- **No placeholder language.** The plan should contain no `TBD`, `TODO`, "implement later," or vague "add validation"-style steps. Task 5's three test bodies are _sketches with explicit acknowledgment_ — the implementer is told exactly which existing test patterns to mirror, and the conditions under which to escalate. That's intentional honest scope, not a placeholder.
 
 - **Type consistency.** Field names match between schema, prompt, fixtures, and runtime:
   - `addedNodes` (singular form on the command; plural form on `PhasePlannerOutput`) — both refer to `Schema.Array(WeaveNode)`.
@@ -1757,6 +1771,7 @@ Run through this once Task 6 is done.
 The full machinery for "Phase Planning Node emits Tasks → Blueprint extends → run goes back to reviewing → user approves → Tasks ready to dispatch" exists. The only missing piece for a working incremental-planning run is the scheduler trigger that auto-dispatches a Planning Node when its Phase becomes ready. That's Slice 4.
 
 If a Planning Node is somehow dispatched in this slice (e.g., via a manual `weave.node.dispatch` from a test harness or a CLI), the rest of the chain works end-to-end:
+
 - Agent runs in child thread.
 - Conformer sees the kind=planning node, reads agent output, validates, dispatches `weave.blueprint.extend`.
 - Decider validates, emits node-verified + extended + compiled.
