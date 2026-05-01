@@ -6,8 +6,10 @@
  *  1. Resolves the existing child thread + worktree from the read model.
  *  2. Looks up the full `WeaveNode` from the run's blueprint.
  *  3. Dispatches a new `thread.turn.start` on the existing child thread, with
- *     the same `formatNodeSpec(node)` text the WeaveScheduler uses on initial
- *     dispatch. The worktree is reused; no new git operations.
+ *     the same prompt the WeaveScheduler uses on initial dispatch:
+ *     `formatPlanningNodeSpec` for `kind: "planning"` nodes,
+ *     `formatNodeSpec` for everything else. The worktree is reused; no new
+ *     git operations.
  *  4. The verifier runs automatically when the new turn quiesces — handled by
  *     WeaveContractConformer's existing session-ready trigger.
  *
@@ -23,7 +25,7 @@ import {
   WeaveNodeRestarter,
   type WeaveNodeRestarterShape,
 } from "../Services/WeaveNodeRestarter.ts";
-import { formatNodeSpec } from "./WeaveScheduler.ts";
+import { formatNodeSpec, formatPlanningNodeSpec } from "./WeaveScheduler.ts";
 
 const serverCommandId = (): CommandId => CommandId.make(`server:restarter:${crypto.randomUUID()}`);
 
@@ -43,13 +45,15 @@ const make = Effect.gen(function* () {
         yield* Effect.logWarning("WeaveNodeRestarter: run not found", trigger);
         return;
       }
+      const blueprint = run.currentBlueprint;
       const child = run.childThreads.get(trigger.nodeId);
-      const node = run.currentBlueprint?.nodes.find((n) => n.id === trigger.nodeId) ?? null;
-      if (!child || node === null) {
-        yield* Effect.logWarning("WeaveNodeRestarter: child thread or node not found", {
+      const node = blueprint?.nodes.find((n) => n.id === trigger.nodeId) ?? null;
+      if (!child || node === null || blueprint === null) {
+        yield* Effect.logWarning("WeaveNodeRestarter: child thread, node, or blueprint not found", {
           ...trigger,
           hasChild: child !== undefined,
           hasNode: node !== null,
+          hasBlueprint: blueprint !== null,
         });
         return;
       }
@@ -59,7 +63,15 @@ const make = Effect.gen(function* () {
         nodeId: trigger.nodeId,
         childThreadId: child.threadId,
         worktreePath: child.worktreePath,
+        nodeKind: node.kind,
       });
+
+      // Planning Nodes get the same structured Phase Planner prompt the
+      // scheduler uses on initial dispatch; Tasks keep the generic node spec.
+      const messageText =
+        node.kind === "planning"
+          ? formatPlanningNodeSpec(node, blueprint, run.run)
+          : formatNodeSpec(node);
 
       yield* orchestrationEngine.dispatch({
         type: "thread.turn.start",
@@ -68,7 +80,7 @@ const make = Effect.gen(function* () {
         message: {
           messageId: MessageId.make(crypto.randomUUID()),
           role: "user",
-          text: formatNodeSpec(node),
+          text: messageText,
           attachments: [],
         },
         interactionMode: "default",
