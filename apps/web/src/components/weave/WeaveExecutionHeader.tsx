@@ -89,7 +89,12 @@ export function WeaveExecutionHeader({
         </div>
       </div>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!submitting) setConfirmOpen(open);
+        }}
+      >
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete weave "{shell.title}"?</AlertDialogTitle>
