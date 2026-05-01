@@ -759,3 +759,30 @@ describe("projectWeaveEvent — weave.blueprint-compiled (nodeMeta preservation)
     expect(afterV1.nodeMeta.get(WeaveNodeId.make("b"))?.status).toBe("pending");
   });
 });
+
+describe("projectWeaveEvent — weave.deleted", () => {
+  it("returns state unchanged when state is non-null (deletion is handled at the read-model level)", async () => {
+    const created = await Effect.runPromise(
+      projectWeaveEvent(
+        null,
+        weaveEvent("weave.created", {
+          weaveRunId: WeaveRunId.make("run-1"),
+          projectId: ProjectId.make("project-1"),
+          title: "x",
+          vision: "",
+          occurredAt: now,
+        }),
+      ),
+    );
+    const after = await Effect.runPromise(
+      projectWeaveEvent(
+        created,
+        weaveEvent("weave.deleted", {
+          weaveRunId: WeaveRunId.make("run-1"),
+          occurredAt: now,
+        }),
+      ),
+    );
+    expect(after).toBe(created);
+  });
+});

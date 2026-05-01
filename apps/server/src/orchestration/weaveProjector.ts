@@ -374,6 +374,13 @@ export function projectWeaveEvent(
       }
       return Effect.succeed(state);
     }
+    case "weave.deleted": {
+      // Hard delete is performed at the read-model level in projector.ts, which
+      // removes the run entry from `weaveRuns` without invoking projectWeaveEvent.
+      // This case exists only to keep the exhaustive `_exhaustive: never` check
+      // happy; it must never actually be reached.
+      return Effect.succeed(state ?? (null as never));
+    }
     default: {
       const _exhaustive: never = event;
       void _exhaustive;

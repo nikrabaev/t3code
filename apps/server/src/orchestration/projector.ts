@@ -686,6 +686,16 @@ export function projectEvent(
       });
     }
 
+    case "weave.deleted": {
+      const runId = event.payload.weaveRunId;
+      if (!model.weaveRuns.has(runId)) {
+        return Effect.succeed(nextBase);
+      }
+      const nextWeaveRuns = new Map(model.weaveRuns);
+      nextWeaveRuns.delete(runId);
+      return Effect.succeed({ ...nextBase, weaveRuns: nextWeaveRuns });
+    }
+
     case "weave.created":
     case "weave.blueprint-compiled":
     case "weave.blueprint-approved":
