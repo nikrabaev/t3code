@@ -787,9 +787,7 @@ describe("WeaveScheduler", () => {
     // Confirm the planning node was dispatched (status running, child thread allocated).
     const projection = await system.run(weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
     expect(projection?.nodeMeta.get(WeaveNodeId.make("plan-phase-42"))?.status).toBe("running");
-    const childThreadId = projection?.childThreads.get(
-      WeaveNodeId.make("plan-phase-42"),
-    )?.threadId;
+    const childThreadId = projection?.childThreads.get(WeaveNodeId.make("plan-phase-42"))?.threadId;
     expect(childThreadId).toBeDefined();
 
     // Find the user message-sent event for the child thread and assert its text
