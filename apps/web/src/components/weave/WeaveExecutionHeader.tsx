@@ -1,16 +1,56 @@
-import type { OrchestrationWeaveRunShell } from "@t3tools/contracts";
+import { type EnvironmentId, type OrchestrationWeaveRunShell } from "@t3tools/contracts";
+import { useState } from "react";
+
+import { dispatchWeaveCommand } from "../../weave/dispatchWeaveCommand";
+import { newCommandId } from "../../lib/utils";
+import { Button } from "../ui/button";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 export interface WeaveExecutionHeaderProps {
   readonly shell: OrchestrationWeaveRunShell;
+  readonly environmentId: EnvironmentId;
+  readonly onDeleted: () => void;
 }
 
-export function WeaveExecutionHeader({ shell }: WeaveExecutionHeaderProps) {
+export function WeaveExecutionHeader({
+  shell,
+  environmentId,
+  onDeleted,
+}: WeaveExecutionHeaderProps) {
   const total =
     shell.pendingCount +
     shell.readyCount +
     shell.runningCount +
     shell.verifiedCount +
     shell.failedCount;
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    setSubmitting(true);
+    try {
+      await dispatchWeaveCommand(environmentId, {
+        type: "weave.delete",
+        commandId: newCommandId(),
+        weaveRunId: shell.id,
+        createdAt: new Date().toISOString(),
+      });
+      setConfirmOpen(false);
+      onDeleted();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <header className="border-b border-border flex items-center justify-between gap-4 px-6 py-4 min-w-0">
       <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -37,7 +77,36 @@ export function WeaveExecutionHeader({ shell }: WeaveExecutionHeaderProps) {
           />
           <span className="text-muted-foreground">1 (locked)</span>
         </div>
+        <div className="border-l border-border pl-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            aria-label="Delete weave"
+          >
+            Delete weave
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete weave "{shell.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the weave run from your environment. Child threads created by the weave
+              (planner, dispatched nodes) will remain and must be deleted separately if you no
+              longer need them. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={submitting}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </header>
   );
 }

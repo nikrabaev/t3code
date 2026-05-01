@@ -52,7 +52,13 @@ export function WeaveView(props: WeaveViewProps) {
 
       {/* Center: canvas */}
       <main className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
-        <WeaveExecutionHeader shell={shell} />
+        <WeaveExecutionHeader
+          shell={shell}
+          environmentId={props.environmentId}
+          onDeleted={() => {
+            void navigate({ to: "/", replace: true });
+          }}
+        />
         {shell.status === "complete" && (
           <WeaveCompletionBanner environmentId={props.environmentId} weaveRunId={shell.id} />
         )}
