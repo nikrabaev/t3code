@@ -1214,3 +1214,58 @@ it.effect("BlueprintSource includes 'phase-planning'", () =>
     }
   }),
 );
+
+import { WeaveDeleteCommand, WeaveDeletedPayload } from "./weave.ts";
+
+const decodeWeaveDelete = Schema.decodeUnknownEffect(WeaveDeleteCommand);
+const decodeWeaveDeletedPayload = Schema.decodeUnknownEffect(WeaveDeletedPayload);
+
+it.effect("decodes weave.delete command", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDelete({
+      type: "weave.delete",
+      commandId: "cmd-del-1",
+      weaveRunId: "run-1",
+      createdAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.type, "weave.delete");
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+    assert.strictEqual(parsed.commandId, "cmd-del-1");
+  }),
+);
+
+it.effect("rejects weave.delete command with wrong type literal", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWeaveDelete({
+        type: "weave.exit",
+        commandId: "cmd-del-bad",
+        weaveRunId: "run-1",
+        createdAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("decodes WeaveDeletedPayload", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWeaveDeletedPayload({
+      weaveRunId: "run-1",
+      occurredAt: "2026-04-21T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.weaveRunId, "run-1");
+    assert.strictEqual(parsed.occurredAt, "2026-04-21T00:00:00.000Z");
+  }),
+);
+
+it.effect("rejects WeaveDeletedPayload missing weaveRunId", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeWeaveDeletedPayload({
+        occurredAt: "2026-04-21T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);

@@ -169,6 +169,12 @@ export function decideWeaveCommand(input: {
         ];
       });
     }
+    // weave.delete is intentionally hard-delete: it removes the run from the
+    // read model rather than soft-deleting (no `deletedAt` field on WeaveRun).
+    // Allowed in any non-absent state — including terminal `complete`/`aborted`
+    // — so users can clean up finished runs. The `weave.deleted` event is
+    // emitted; the projector hard-removes from `model.weaveRuns` and the WS
+    // shell stream emits `weave-run-removed` so clients drop their local state.
     case "weave.delete": {
       return Effect.gen(function* () {
         yield* requireRun({ projection, command });

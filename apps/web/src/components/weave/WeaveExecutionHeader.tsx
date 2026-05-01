@@ -105,7 +105,12 @@ export function WeaveExecutionHeader({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose
+              disabled={submitting}
+              render={<Button variant="outline" disabled={submitting} />}
+            >
+              Cancel
+            </AlertDialogClose>
             <Button variant="destructive" onClick={handleConfirmDelete} disabled={submitting}>
               Delete
             </Button>

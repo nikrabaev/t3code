@@ -1083,6 +1083,78 @@ describe("orchestration projector — weave events", () => {
     // thread was added
     expect(afterThread.threads).toHaveLength(1);
   });
+
+  it("orphan weave.blueprint-compiled after weave.deleted is a no-op (C1 race guard)", async () => {
+    const initial = createEmptyReadModel(NOW);
+
+    // Step 1: run materializes via weave.created
+    const afterCreate = await Effect.runPromise(
+      projectEvent(
+        initial,
+        makeWeaveEvent({
+          sequence: 1,
+          type: "weave.created",
+          payload: {
+            weaveRunId: RUN_ID,
+            projectId: PROJECT_ID,
+            title: "My feature",
+            vision: "Ship it",
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+    expect(afterCreate.weaveRuns.size).toBe(1);
+
+    // Step 2: run is hard-deleted via weave.deleted
+    const afterDelete = await Effect.runPromise(
+      projectEvent(afterCreate, {
+        sequence: 2,
+        eventId: EventId.make("weave-event-delete"),
+        type: "weave.deleted",
+        aggregateKind: "weave",
+        aggregateId: RUN_ID,
+        occurredAt: NOW,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: { weaveRunId: RUN_ID, occurredAt: NOW },
+      } as OrchestrationEvent),
+    );
+    expect(afterDelete.weaveRuns.size).toBe(0);
+
+    // Step 3: planner's async LLM call returns late and emits weave.blueprint-compiled
+    // This should be a graceful no-op — no error, no new entry in weaveRuns
+    const afterOrphan = await Effect.runPromise(
+      projectEvent(
+        afterDelete,
+        makeWeaveEvent({
+          sequence: 3,
+          type: "weave.blueprint-compiled",
+          payload: {
+            weaveRunId: RUN_ID,
+            version: BlueprintVersion.make(1),
+            blueprint: {
+              version: BlueprintVersion.make(1),
+              nodes: [],
+              phases: [],
+              contracts: [],
+              decisions: [],
+              compiledAt: NOW,
+              compiledBy: "planner" as const,
+            },
+            compiledBy: "planner" as const,
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+
+    // The projector must no-op: model unchanged, no new run entry
+    expect(afterOrphan.weaveRuns.size).toBe(0);
+    expect(afterOrphan.snapshotSequence).toBe(3);
+  });
 });
 
 describe("orchestration projector — weave.planner.thread-created", () => {

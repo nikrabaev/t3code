@@ -709,6 +709,15 @@ export function projectEvent(
     case "weave.exited": {
       const runId = event.payload.weaveRunId;
       const existing = model.weaveRuns.get(runId) ?? null;
+      // If the run was deleted (hard-delete via weave.deleted) but a downstream
+      // async path persisted a follow-up event for it (e.g. WeavePlanner emitting
+      // weave.blueprint-compiled after the user deleted the run), gracefully no-op
+      // rather than failing the projector. Without this, an orphan event would
+      // poison bootstrap replay and the server would fail to start.
+      // weave.created remains the only event allowed to start from null state.
+      if (existing === null && event.type !== "weave.created") {
+        return Effect.succeed(nextBase);
+      }
       return projectWeaveEvent(existing, event).pipe(
         Effect.map((next) => {
           const nextWeaveRuns = new Map(model.weaveRuns);
