@@ -785,4 +785,17 @@ describe("projectWeaveEvent — weave.deleted", () => {
     );
     expect(after).toBe(created);
   });
+
+  it("fails when called with null state (unreachable in production)", async () => {
+    const result = await Effect.runPromiseExit(
+      projectWeaveEvent(
+        null,
+        weaveEvent("weave.deleted", {
+          weaveRunId: WeaveRunId.make("run-1"),
+          occurredAt: now,
+        }),
+      ),
+    );
+    expect(result._tag).toBe("Failure");
+  });
 });

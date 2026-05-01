@@ -379,7 +379,15 @@ export function projectWeaveEvent(
       // removes the run entry from `weaveRuns` without invoking projectWeaveEvent.
       // This case exists only to keep the exhaustive `_exhaustive: never` check
       // happy; it must never actually be reached.
-      return Effect.succeed(state ?? (null as never));
+      if (state === null) {
+        return Effect.fail(
+          new OrchestrationProjectorDecodeError({
+            eventType: event.type,
+            issue: `weave.deleted should never be projected through projectWeaveEvent (null received).`,
+          }),
+        );
+      }
+      return Effect.succeed(state);
     }
     default: {
       const _exhaustive: never = event;
