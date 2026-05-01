@@ -15,7 +15,7 @@
  *
  * @module WeaveSchedulerLive
  */
-import type { WeaveNode, WeaveNodeId, WeaveRunProjection } from "@t3tools/contracts";
+import type { Blueprint, WeaveNode, WeaveNodeId, WeaveRun, WeaveRunProjection } from "@t3tools/contracts";
 import {
   CommandId,
   DEFAULT_MODEL_BY_PROVIDER,
@@ -26,6 +26,7 @@ import {
 import { Cause, Effect, Layer, Stream } from "effect";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
+import { buildPhasePlannerPrompt } from "./plannerPrompt.ts";
 import { GitCore } from "../../git/Services/GitCore.ts";
 import type { GitCommandError } from "@t3tools/contracts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -136,6 +137,42 @@ function shortHash(input: string): string {
  */
 function buildBranchName(runId: string, nodeId: WeaveNodeId): string {
   return `weave-${runId.slice(0, 8)}-${slugifyNodeId(nodeId)}-${shortHash(nodeId)}`;
+}
+
+/**
+ * Format the user message text for a `kind: "planning"` Node dispatch.
+ *
+ * Builds a structured Phase Planner prompt via `buildPhasePlannerPrompt`,
+ * which instructs the agent to emit a `PhasePlannerOutput` JSON object — the
+ * conformer's `processPlanningNode` then parses and validates that JSON to
+ * dispatch `weave.blueprint.extend`.
+ *
+ * Looks up the planner node's phase from the blueprint by `node.phaseId`.
+ * Throws if the phase is missing, which would only happen if the blueprint
+ * is internally inconsistent (the schema and decider both prevent this).
+ *
+ * Exported so the WeaveNodeRestarter reactor can call the same helper when
+ * re-dispatching a Planning Node on retry.
+ */
+export function formatPlanningNodeSpec(
+  node: WeaveNode,
+  blueprint: Blueprint,
+  run: { readonly vision: string; readonly snapshotContent?: string | undefined },
+): string {
+  const phase = blueprint.phases.find((p) => p.id === node.phaseId);
+  if (phase === undefined) {
+    throw new Error(
+      `formatPlanningNodeSpec: planning node '${node.id}' references unknown phase '${node.phaseId}'`,
+    );
+  }
+  return buildPhasePlannerPrompt({
+    vision: run.vision,
+    snapshotContent: run.snapshotContent ?? "",
+    phaseTitle: phase.title,
+    phaseDescription: phase.description,
+    plannerNodeDescription: node.description,
+    plannerPhaseId: node.phaseId,
+  });
 }
 
 /**

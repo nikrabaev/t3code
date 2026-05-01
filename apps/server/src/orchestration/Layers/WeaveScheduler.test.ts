@@ -905,3 +905,175 @@ describe("WeaveScheduler — kind-stratified ready check", () => {
     await system.dispose();
   });
 });
+
+import { formatPlanningNodeSpec } from "./WeaveScheduler.ts";
+
+describe("formatPlanningNodeSpec", () => {
+  function makePlanningNode(params: { id?: string; phaseId?: string; description?: string } = {}) {
+    const phaseId = WeavePhaseId.make(params.phaseId ?? "phase-1");
+    const nodeId = WeaveNodeId.make(params.id ?? "plan-phase-1");
+    return Schema.decodeSync(
+      Schema.Struct({
+        id: WeaveNodeId,
+        title: Schema.String,
+        description: Schema.String,
+        kind: Schema.Literal("planning"),
+        phaseId: WeavePhaseId,
+        scope: Schema.Struct({
+          readSet: Schema.Array(Schema.String),
+          writeSet: Schema.Array(Schema.String),
+        }),
+        inputContractIds: Schema.Array(Schema.String),
+        outputContractIds: Schema.Array(Schema.String),
+        verifierDescription: Schema.String,
+        dependsOn: Schema.Array(WeaveNodeId),
+        status: Schema.Literal("pending"),
+      }),
+    )({
+      id: nodeId,
+      title: "Plan Phase 1",
+      description: params.description ?? "Plan the scaffolding sub-tasks for Phase 1",
+      kind: "planning",
+      phaseId,
+      scope: { readSet: [], writeSet: [] },
+      inputContractIds: [],
+      outputContractIds: [],
+      verifierDescription: "PhasePlannerOutput JSON",
+      dependsOn: [],
+      status: "pending",
+    });
+  }
+
+  function makePlanningBlueprint(params: { phaseId?: string; phaseTitle?: string; phaseDescription?: string } = {}): Blueprint {
+    const phaseId = WeavePhaseId.make(params.phaseId ?? "phase-1");
+    return Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(1),
+      nodes: [
+        {
+          id: WeaveNodeId.make("plan-phase-1"),
+          title: "Plan Phase 1",
+          description: "Plan the scaffolding sub-tasks for Phase 1",
+          kind: "planning",
+          phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: "PhasePlannerOutput JSON",
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        {
+          id: phaseId,
+          ordinal: 0,
+          title: params.phaseTitle ?? "Phase 1: Scaffolding",
+          description: params.phaseDescription ?? "Stand up the project skeleton",
+          approval: "pending",
+        },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: now(),
+      compiledBy: "planner",
+    });
+  }
+
+  it("passes vision through to the prompt", () => {
+    const node = makePlanningNode();
+    const blueprint = makePlanningBlueprint();
+    const text = formatPlanningNodeSpec(node, blueprint, {
+      vision: "Build a minimal todo app",
+    });
+    expect(text).toContain("Build a minimal todo app");
+  });
+
+  it("passes snapshotContent through to the prompt", () => {
+    const node = makePlanningNode();
+    const blueprint = makePlanningBlueprint();
+    const text = formatPlanningNodeSpec(node, blueprint, {
+      vision: "ignored here",
+      snapshotContent: "FILE_TREE_HERE",
+    });
+    expect(text).toContain("FILE_TREE_HERE");
+  });
+
+  it("falls back to '(empty)' when snapshotContent is undefined", () => {
+    const node = makePlanningNode();
+    const blueprint = makePlanningBlueprint();
+    const text = formatPlanningNodeSpec(node, blueprint, { vision: "v" });
+    expect(text).toContain("(empty)");
+  });
+
+  it("includes the planner node's description", () => {
+    const node = makePlanningNode({
+      description: "Plan the database migration tasks for this phase.",
+    });
+    const blueprint = Schema.decodeSync(Blueprint)({
+      version: BlueprintVersion.make(1),
+      nodes: [
+        {
+          id: node.id,
+          title: node.title,
+          description: node.description,
+          kind: "planning",
+          phaseId: node.phaseId,
+          scope: { readSet: [], writeSet: [] },
+          inputContractIds: [],
+          outputContractIds: [],
+          verifierDescription: node.verifierDescription,
+          dependsOn: [],
+          status: "pending",
+        },
+      ],
+      phases: [
+        {
+          id: node.phaseId,
+          ordinal: 0,
+          title: "Phase 1",
+          description: "x",
+          approval: "pending",
+        },
+      ],
+      contracts: [],
+      decisions: [],
+      compiledAt: now(),
+      compiledBy: "planner",
+    });
+    const text = formatPlanningNodeSpec(node, blueprint, { vision: "v" });
+    expect(text).toContain("Plan the database migration tasks for this phase.");
+  });
+
+  it("includes the planner's phaseId in the prompt template", () => {
+    const node = makePlanningNode({ phaseId: "phase-42" });
+    const blueprint = makePlanningBlueprint({ phaseId: "phase-42" });
+    const text = formatPlanningNodeSpec(node, blueprint, { vision: "v" });
+    expect(text).toContain("phase-42");
+  });
+
+  it("includes the looked-up phase title and description", () => {
+    const node = makePlanningNode();
+    const blueprint = makePlanningBlueprint({
+      phaseTitle: "PHASE_TITLE_MARKER",
+      phaseDescription: "PHASE_DESCRIPTION_MARKER",
+    });
+    const text = formatPlanningNodeSpec(node, blueprint, { vision: "v" });
+    expect(text).toContain("PHASE_TITLE_MARKER");
+    expect(text).toContain("PHASE_DESCRIPTION_MARKER");
+  });
+
+  it("throws when the phase is missing from the blueprint", () => {
+    const node = makePlanningNode({ phaseId: "phase-orphan" });
+    // Build a blueprint whose phase id doesn't match the node's phaseId.
+    // If the Blueprint schema enforces phase/node consistency at decode time
+    // and rejects this construction, build a mismatched node directly without
+    // round-tripping the orphan node through Schema.decodeSync — what we are
+    // testing is formatPlanningNodeSpec's behavior when blueprint.phases does
+    // not contain a phase with id === node.phaseId.
+    const orphanNode = { ...node, phaseId: WeavePhaseId.make("does-not-exist") };
+    const blueprint = makePlanningBlueprint({ phaseId: "phase-1" });
+    expect(() =>
+      formatPlanningNodeSpec(orphanNode as typeof node, blueprint, { vision: "v" }),
+    ).toThrow(/unknown phase|does-not-exist/);
+  });
+});
