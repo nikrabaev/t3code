@@ -13,6 +13,7 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import { stackedThreadToast, toastManager } from "../ui/toast";
 
 export interface WeaveExecutionHeaderProps {
   readonly shell: OrchestrationWeaveRunShell;
@@ -46,6 +47,14 @@ export function WeaveExecutionHeader({
       });
       setConfirmOpen(false);
       onDeleted();
+    } catch (err) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Unable to delete weave",
+          description: err instanceof Error ? err.message : "An unknown error occurred.",
+        }),
+      );
     } finally {
       setSubmitting(false);
     }
