@@ -694,6 +694,132 @@ describe("WeaveScheduler", () => {
 
     await system.dispose();
   });
+
+  it("dispatches kind === 'planning' nodes with a Phase Planner prompt as the user message", async () => {
+    const projectId = "project-sched-planning";
+    const runId = "run-sched-planning";
+    const system = await createSchedulerSystem("t3-weave-sched-planning-");
+    const { scheduler, weaveEngine, orchestrationEngine } = system;
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* scheduler.start();
+          yield* Effect.sleep("20 millis");
+
+          yield* orchestrationEngine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-project-${projectId}`),
+            projectId: asProjectId(projectId),
+            title: "Test Project",
+            workspaceRoot: FAKE_WORKSPACE_ROOT,
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt: now(),
+          });
+
+          // Build a 1-Phase, 1-Planning-Node blueprint.
+          const phaseId = WeavePhaseId.make("phase-42");
+          const plannerNodeId = WeaveNodeId.make("plan-phase-42");
+          const blueprint = Schema.decodeSync(Blueprint)({
+            version: BlueprintVersion.make(1),
+            nodes: [
+              {
+                id: plannerNodeId,
+                title: "Plan Phase 42",
+                description: "PLANNER_NODE_DESCRIPTION_MARKER",
+                kind: "planning",
+                phaseId,
+                scope: { readSet: [], writeSet: [] },
+                inputContractIds: [],
+                outputContractIds: [],
+                verifierDescription: "PhasePlannerOutput JSON",
+                dependsOn: [],
+                status: "pending",
+              },
+            ],
+            phases: [
+              {
+                id: phaseId,
+                ordinal: 0,
+                title: "PHASE_TITLE_MARKER",
+                description: "PHASE_DESCRIPTION_MARKER",
+                approval: "pending",
+              },
+            ],
+            contracts: [],
+            decisions: [],
+            compiledAt: now(),
+            compiledBy: "planner",
+          });
+
+          yield* weaveEngine.dispatchWeaveCommand({
+            type: "weave.create",
+            commandId: CommandId.make(`cmd-create-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            projectId: asProjectId(projectId),
+            title: "Phase Planning Test",
+            vision: "VISION_MARKER",
+            snapshotContent: "SNAPSHOT_MARKER",
+            createdAt: now(),
+          });
+
+          yield* weaveEngine.persistPlannerEvent({
+            runId: WeaveRunId.make(runId),
+            blueprint,
+            compiledBy: "planner",
+          });
+
+          yield* weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+
+          yield* scheduler.drain;
+        }),
+      ),
+    );
+
+    // Confirm the planning node was dispatched (status running, child thread allocated).
+    const projection = await system.run(weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    expect(projection?.nodeMeta.get(WeaveNodeId.make("plan-phase-42"))?.status).toBe("running");
+    const childThreadId = projection?.childThreads.get(
+      WeaveNodeId.make("plan-phase-42"),
+    )?.threadId;
+    expect(childThreadId).toBeDefined();
+
+    // Find the user message-sent event for the child thread and assert its text
+    // contains the Phase Planner prompt's distinguishing markers.
+    const allEvents = await system.run(Stream.runCollect(orchestrationEngine.readEvents(0)));
+    const userMessageEvent = Array.from(allEvents).find(
+      (e) =>
+        e.type === "thread.message-sent" &&
+        e.payload.threadId === childThreadId &&
+        e.payload.role === "user",
+    );
+    expect(userMessageEvent).toBeDefined();
+    if (userMessageEvent === undefined || userMessageEvent.type !== "thread.message-sent") {
+      throw new Error("user message-sent event missing");
+    }
+    const text = userMessageEvent.payload.text;
+
+    // Phase Planner prompt distinguishing markers.
+    expect(text).toContain("Phase Planner");
+    expect(text).toContain('"addedNodes"');
+    expect(text).toContain("phase-42");
+    expect(text).toContain("VISION_MARKER");
+    expect(text).toContain("SNAPSHOT_MARKER");
+    expect(text).toContain("PHASE_TITLE_MARKER");
+    expect(text).toContain("PHASE_DESCRIPTION_MARKER");
+    expect(text).toContain("PLANNER_NODE_DESCRIPTION_MARKER");
+    // Negative: the prompt MUST NOT contain the generic Task header.
+    expect(text).not.toContain("# Task: Plan Phase 42");
+
+    await system.dispose();
+  });
 });
 
 describe("WeaveScheduler — kind-stratified ready check", () => {
@@ -944,7 +1070,9 @@ describe("formatPlanningNodeSpec", () => {
     });
   }
 
-  function makePlanningBlueprint(params: { phaseId?: string; phaseTitle?: string; phaseDescription?: string } = {}): Blueprint {
+  function makePlanningBlueprint(
+    params: { phaseId?: string; phaseTitle?: string; phaseDescription?: string } = {},
+  ): Blueprint {
     const phaseId = WeavePhaseId.make(params.phaseId ?? "phase-1");
     return Schema.decodeSync(Blueprint)({
       version: BlueprintVersion.make(1),

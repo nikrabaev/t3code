@@ -331,7 +331,16 @@ const processSchedulerDecision = Effect.fn("WeaveScheduler.processSchedulerDecis
     createdAt: new Date().toISOString(),
   });
 
-  // Start the child thread's first turn with the node spec as user message
+  // Start the child thread's first turn with the node spec as user message.
+  // Planning Nodes get a structured Phase Planner prompt that constrains
+  // output to PhasePlannerOutput JSON; Tasks get the generic node spec.
+  // run.currentBlueprint is non-null here (checked at the top of this fn).
+  const blueprint = run.currentBlueprint;
+  const messageText =
+    next.kind === "planning"
+      ? formatPlanningNodeSpec(next, blueprint, run.run)
+      : formatNodeSpec(next);
+
   yield* orchestrationEngine.dispatch({
     type: "thread.turn.start",
     commandId: serverCommandId(),
@@ -339,7 +348,7 @@ const processSchedulerDecision = Effect.fn("WeaveScheduler.processSchedulerDecis
     message: {
       messageId: MessageId.make(crypto.randomUUID()),
       role: "user",
-      text: formatNodeSpec(next),
+      text: messageText,
       attachments: [],
     },
     interactionMode: "default",
