@@ -698,6 +698,7 @@ export function projectEvent(
 
     case "weave.created":
     case "weave.blueprint-compiled":
+    case "weave.blueprint-extended":
     case "weave.blueprint-approved":
     case "weave.node-dispatched":
     case "weave.node-verified":

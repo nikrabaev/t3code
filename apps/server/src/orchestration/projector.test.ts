@@ -4,6 +4,7 @@ import {
   EventId,
   ProjectId,
   ThreadId,
+  WeaveNodeId,
   WeaveRunId,
   type OrchestrationEvent,
 } from "@t3tools/contracts";
@@ -1154,6 +1155,65 @@ describe("orchestration projector — weave events", () => {
     // The projector must no-op: model unchanged, no new run entry
     expect(afterOrphan.weaveRuns.size).toBe(0);
     expect(afterOrphan.snapshotSequence).toBe(3);
+  });
+
+  it("routes weave.blueprint-extended through the per-aggregate projector", async () => {
+    // The per-aggregate handler in weaveProjector.ts:361 is informational today
+    // (the sister weave.blueprint-compiled event mutates state). This test
+    // guards against the prior gap where weave.blueprint-extended was missing
+    // from the outer projector's grouped case and silently fell through to the
+    // default branch — meaning future state-mutating logic in the per-aggregate
+    // handler would never reach the read model.
+    const initial = createEmptyReadModel(NOW);
+
+    const afterCreate = await Effect.runPromise(
+      projectEvent(
+        initial,
+        makeWeaveEvent({
+          sequence: 1,
+          type: "weave.created",
+          payload: {
+            weaveRunId: RUN_ID,
+            projectId: PROJECT_ID,
+            title: "My feature",
+            vision: "Ship it",
+            occurredAt: NOW,
+          },
+        }),
+      ),
+    );
+    expect(afterCreate.weaveRuns.size).toBe(1);
+
+    const afterExtend = await Effect.runPromise(
+      projectEvent(afterCreate, {
+        sequence: 2,
+        eventId: EventId.make("weave-event-extended"),
+        type: "weave.blueprint-extended",
+        aggregateKind: "weave",
+        aggregateId: RUN_ID,
+        occurredAt: NOW,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          weaveRunId: RUN_ID,
+          version: BlueprintVersion.make(2),
+          plannerNodeId: WeaveNodeId.make("planner-node-1"),
+          addedNodeIds: [],
+          occurredAt: NOW,
+        },
+      } as OrchestrationEvent),
+    );
+
+    // Run is preserved (per-aggregate handler is a no-op for this event today).
+    expect(afterExtend.weaveRuns.size).toBe(1);
+    expect(afterExtend.weaveRuns.get(RUN_ID)?.run.status).toBe("draft");
+    // The grouped case rebuilds weaveRuns via `new Map(...)`; the default branch
+    // would have left the original map reference untouched. Asserting a fresh
+    // map reference confirms the routing went through the per-aggregate handler.
+    expect(afterExtend.weaveRuns).not.toBe(afterCreate.weaveRuns);
+    expect(afterExtend.snapshotSequence).toBe(2);
   });
 });
 
