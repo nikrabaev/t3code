@@ -30,6 +30,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
+  TurnId,
   WeaveNodeId,
   WeavePhaseId,
   WeaveRunId,
@@ -401,8 +402,32 @@ function startSmartTurnDriver(
             });
           }
 
-          // Dispatch session.set with status "ready" — the conformer's
-          // trigger event.
+          // Mirror ProviderRuntimeIngestion's session lifecycle: a
+          // session.set(status="running", activeTurnId=...) first (so the
+          // projector marks `thread.latestTurn` as running), then
+          // session.set(status="ready", activeTurnId=null) — the conformer's
+          // trigger event. Without the running prelude, the conformer's
+          // post-Slice-5 guard (`thread.latestTurn === null` ⇒ skip) would
+          // suppress the trigger.
+          const turnId = TurnId.make(`turn-${crypto.randomUUID()}`);
+          const runningAt = now();
+          yield* system.orchestrationEngine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make(`cmd-session-set-running-${crypto.randomUUID()}`),
+            threadId,
+            session: {
+              threadId,
+              status: "running",
+              providerName: "stub",
+              runtimeMode: "full-access",
+              activeTurnId: turnId,
+              lastError: null,
+              updatedAt: runningAt,
+            },
+            createdAt: runningAt,
+          });
+
+          const readyAt = now();
           yield* system.orchestrationEngine.dispatch({
             type: "thread.session.set",
             commandId: CommandId.make(`cmd-session-set-${crypto.randomUUID()}`),
@@ -414,9 +439,9 @@ function startSmartTurnDriver(
               runtimeMode: "full-access",
               activeTurnId: null,
               lastError: null,
-              updatedAt: now(),
+              updatedAt: readyAt,
             },
-            createdAt: now(),
+            createdAt: readyAt,
           });
         }),
     ),

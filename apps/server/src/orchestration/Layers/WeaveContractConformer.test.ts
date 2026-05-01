@@ -23,6 +23,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
+  TurnId,
   WeaveNodeId,
   WeavePhaseId,
   WeaveRunId,
@@ -298,14 +299,39 @@ async function seedProjectAndRunningWeave(
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 /**
- * Drives the conformer by dispatching `thread.session.set` for the child
- * thread, mirroring what ProviderRuntimeIngestion does on `turn.completed`.
+ * Drives the conformer by simulating the full ProviderRuntimeIngestion turn
+ * lifecycle: first a `thread.session.set` with status="running" + a non-null
+ * `activeTurnId` (mirroring `turn.started`), then a `thread.session.set` with
+ * status="ready" + activeTurnId=null (mirroring `turn.completed`). The first
+ * dispatch causes the projector to set `thread.latestTurn` to a "running"
+ * record; the second is the conformer's actual trigger. The conformer skips
+ * any session-ready fire that arrives BEFORE a turn lifecycle has run (per
+ * the bug fixed in this commit), so the running-prelude is required for the
+ * trigger to take effect.
  */
 function* dispatchSessionReady(
   orchestrationEngine: ReturnType<typeof OrchestrationEngineService.of>,
   threadId: ThreadId,
 ) {
-  const updatedAt = now();
+  const turnId = TurnId.make(`turn-${crypto.randomUUID()}`);
+  const runningAt = now();
+  yield* orchestrationEngine.dispatch({
+    type: "thread.session.set",
+    commandId: CommandId.make(`cmd-session-set-running-${crypto.randomUUID()}`),
+    threadId,
+    session: {
+      threadId,
+      status: "running",
+      providerName: "stub",
+      runtimeMode: "full-access",
+      activeTurnId: turnId,
+      lastError: null,
+      updatedAt: runningAt,
+    },
+    createdAt: runningAt,
+  });
+
+  const readyAt = now();
   yield* orchestrationEngine.dispatch({
     type: "thread.session.set",
     commandId: CommandId.make(`cmd-session-set-${crypto.randomUUID()}`),
@@ -317,9 +343,9 @@ function* dispatchSessionReady(
       runtimeMode: "full-access",
       activeTurnId: null,
       lastError: null,
-      updatedAt,
+      updatedAt: readyAt,
     },
-    createdAt: updatedAt,
+    createdAt: readyAt,
   });
 }
 
@@ -824,6 +850,127 @@ describe("WeaveContractConformer — planning kind", () => {
     expect(failedEvent).toBeDefined();
     const reason = (failedEvent as { payload: { reason: string } }).payload.reason;
     expect(reason.toLowerCase()).toContain("decode");
+
+    await system.dispose();
+  });
+
+  it("session-start fire (no turn yet) is ignored — node is not failed prematurely", async () => {
+    // Reproduces the production bug where ProviderRuntimeIngestion translates
+    // `session.started` into `thread.session.set { status: "ready", activeTurnId: null }`
+    // BEFORE any turn has been requested. The conformer's filter matches that
+    // shape, but at this point the agent has not emitted anything — and a
+    // Planning Node would be incorrectly marked failed with reason
+    // "planning node emitted no assistant text". The conformer must skip the
+    // session-start fire and wait for the post-turn-completed fire.
+    const projectId = "project-conformer-planning-prefire";
+    const runId = "run-conformer-planning-prefire";
+    const nodeId = "node-conformer-planning-prefire";
+
+    const system = await createConformerSystem("t3-conformer-planning-prefire-", {
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+
+    const blueprint = makeValidBlueprint({ nodeId, phaseId: "phase-1", kind: "planning" });
+
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.scheduler.start();
+          yield* Effect.sleep("20 millis");
+          yield* system.orchestrationEngine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-project-${projectId}`),
+            projectId: asProjectId(projectId),
+            title: "Test Project",
+            workspaceRoot: FAKE_WORKSPACE_ROOT,
+            defaultModelSelection: { provider: "codex", model: "gpt-5-codex" },
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.create",
+            commandId: CommandId.make(`cmd-create-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            projectId: asProjectId(projectId),
+            title: "Test Weave",
+            vision: "Build something",
+            createdAt: now(),
+          });
+          yield* system.weaveEngine.persistPlannerEvent({
+            runId: WeaveRunId.make(runId),
+            blueprint,
+            compiledBy: "planner",
+          });
+          yield* system.weaveEngine.dispatchWeaveCommand({
+            type: "weave.blueprint.approve",
+            commandId: CommandId.make(`cmd-approve-${runId}`),
+            weaveRunId: WeaveRunId.make(runId),
+            blueprintVersion: blueprint.version,
+            concurrencyCap: 1,
+            createdAt: now(),
+          });
+          yield* system.scheduler.drain;
+        }),
+      ),
+    );
+
+    const projection = await system.run(system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)));
+    const childEntry = projection?.childThreads.get(WeaveNodeId.make(nodeId));
+    if (!childEntry) throw new Error("Expected child thread to be allocated by scheduler");
+    const childThreadId = childEntry.threadId;
+
+    // Inline the session-set(ready, null) dispatch WITHOUT a preceding
+    // session-set(running, turnId): this is exactly what
+    // ProviderRuntimeIngestion emits at session.started before any turn has
+    // run, and the projector keeps `thread.latestTurn === null` in that
+    // case. No assistant text is injected.
+    await system.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* system.conformer.start();
+          yield* Effect.sleep("20 millis");
+          const updatedAt = now();
+          yield* system.orchestrationEngine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make(`cmd-session-set-prefire-${crypto.randomUUID()}`),
+            threadId: childThreadId,
+            session: {
+              threadId: childThreadId,
+              status: "ready",
+              providerName: "stub",
+              runtimeMode: "full-access",
+              activeTurnId: null,
+              lastError: null,
+              updatedAt,
+            },
+            createdAt: updatedAt,
+          });
+          yield* system.conformer.drain;
+        }),
+      ),
+    );
+
+    const allEvents = await system.run(
+      Stream.runCollect(system.orchestrationEngine.readEvents(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      ),
+    );
+    const failedEvent = allEvents.find(
+      (e) =>
+        e.type === "weave.node-failed" &&
+        "payload" in e &&
+        (e.payload as { nodeId: string }).nodeId === nodeId,
+    );
+    expect(failedEvent, "Conformer must not fail node at session-start fire").toBeUndefined();
+
+    const finalProjection = await system.run(
+      system.weaveEngine.getWeaveRun(WeaveRunId.make(runId)),
+    );
+    expect(finalProjection?.nodeMeta.get(WeaveNodeId.make(nodeId))?.status).toBe("running");
 
     await system.dispose();
   });

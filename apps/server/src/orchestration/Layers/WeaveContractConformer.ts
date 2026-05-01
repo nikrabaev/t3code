@@ -339,6 +339,30 @@ const make = Effect.gen(function* () {
         return;
       }
 
+      // The trigger filter `status === "ready" && activeTurnId === null`
+      // matches at TWO points in a session's life: the post-turn-completed
+      // state we want, AND the initial `session.started`/`thread.started`
+      // notification before any turn has been requested (ProviderRuntimeIngestion
+      // returns "ready" when activeTurnId is null at session start). The
+      // second case has no assistant text and would falsely fail Planning
+      // Nodes — and would prematurely run the verifier on an unworked
+      // worktree for Tasks. `thread.latestTurn === null` cleanly identifies
+      // the session-start fire (the projector only sets latestTurn once a
+      // turn lifecycle event has fired).
+      const triggerThread = readModel.threads.find((t) => t.id === match.threadId);
+      if (triggerThread?.latestTurn == null) {
+        yield* Effect.log(
+          "WeaveContractConformer: session-ready fired before any turn — skipping",
+          {
+            weaveRunId: match.weaveRunId,
+            nodeId: match.nodeId,
+            threadId: match.threadId,
+            triggerKind: trigger.kind,
+          },
+        );
+        return;
+      }
+
       const {
         weaveRunId,
         nodeId,
