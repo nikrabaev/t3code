@@ -1899,8 +1899,13 @@ function applyEnvironmentShellEvent(
         weaveRunsById: { ...state.weaveRunsById, [event.weaveRun.id]: event.weaveRun },
       };
     case "weave-run-removed": {
-      const { [event.weaveRunId]: _, ...rest } = state.weaveRunsById;
-      return { ...state, weaveRunsById: rest };
+      const { [event.weaveRunId]: _shell, ...remainingShells } = state.weaveRunsById;
+      const { [event.weaveRunId]: _detail, ...remainingDetails } = state.weaveRunDetailById;
+      return {
+        ...state,
+        weaveRunsById: remainingShells,
+        weaveRunDetailById: remainingDetails,
+      };
     }
   }
 }

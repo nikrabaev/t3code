@@ -74,7 +74,8 @@ export function deriveOrchestrationBatchEffects(
       case "weave.node-failed":
       case "weave.decision-resolved":
       case "weave.phase-approved":
-      case "weave.exited": {
+      case "weave.exited":
+      case "weave.deleted": {
         break;
       }
 

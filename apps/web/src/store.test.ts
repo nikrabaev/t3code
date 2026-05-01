@@ -8,13 +8,17 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  WeaveRunId,
   type OrchestrationEvent,
+  type OrchestrationWeaveRunShell,
+  type WeaveRunProjection,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
   applyOrchestrationEvent,
   applyOrchestrationEvents,
+  applyShellEvent,
   selectEnvironmentState,
   selectProjectsAcrossEnvironments,
   selectThreadByRef,
@@ -1022,5 +1026,60 @@ describe("incremental orchestration updates", () => {
       state: "running",
     });
     expect(threadsOf(next)[0]?.latestTurn?.sourceProposedPlan).toBeUndefined();
+  });
+});
+
+describe("applyShellEvent — weave-run-removed", () => {
+  it("clears both weaveRunsById and weaveRunDetailById entries for the run", () => {
+    const weaveRunId = WeaveRunId.make("run-to-delete");
+    const projectId = ProjectId.make("project-1");
+    const seedShell: OrchestrationWeaveRunShell = {
+      id: weaveRunId,
+      projectId,
+      title: "doomed",
+      status: "draft" as const,
+      pendingCount: 0,
+      readyCount: 0,
+      runningCount: 0,
+      verifiedCount: 0,
+      failedCount: 0,
+      createdAt: "2026-05-01T00:00:00.000Z" as never,
+      updatedAt: "2026-05-01T00:00:00.000Z" as never,
+    };
+    const seedDetail: WeaveRunProjection = {
+      run: {
+        id: weaveRunId,
+        projectId,
+        title: "doomed",
+        vision: "",
+        status: "draft" as const,
+        concurrencyCap: 1 as never,
+        planningDepthCap: 3 as never,
+        createdAt: "2026-05-01T00:00:00.000Z" as never,
+      },
+      currentBlueprint: null,
+      nodeMeta: new Map(),
+      openDecisions: new Set(),
+      autoDecisionLog: [],
+      phaseApprovals: new Map(),
+      childThreads: new Map(),
+    };
+
+    const seeded = makeEmptyState({
+      weaveRunsById: { [weaveRunId]: seedShell },
+      weaveRunDetailById: { [weaveRunId]: seedDetail },
+    });
+
+    expect(localEnvironmentStateOf(seeded).weaveRunsById[weaveRunId]).toBeDefined();
+    expect(localEnvironmentStateOf(seeded).weaveRunDetailById[weaveRunId]).toBeDefined();
+
+    const next = applyShellEvent(
+      seeded,
+      { kind: "weave-run-removed", sequence: 1 as never, weaveRunId },
+      localEnvironmentId,
+    );
+
+    expect(localEnvironmentStateOf(next).weaveRunsById[weaveRunId]).toBeUndefined();
+    expect(localEnvironmentStateOf(next).weaveRunDetailById[weaveRunId]).toBeUndefined();
   });
 });
