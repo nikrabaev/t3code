@@ -15,7 +15,12 @@
  *
  * @module WeaveSchedulerLive
  */
-import type { Blueprint, WeaveNode, WeaveNodeId, WeaveRun, WeaveRunProjection } from "@t3tools/contracts";
+import type {
+  Blueprint,
+  WeaveNode,
+  WeaveNodeId,
+  WeaveRunProjection,
+} from "@t3tools/contracts";
 import {
   CommandId,
   DEFAULT_MODEL_BY_PROVIDER,
